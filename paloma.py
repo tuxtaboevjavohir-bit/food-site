@@ -265,9 +265,7 @@ def _build(period: str, loc: str) -> dict:
     with ThreadPoolExecutor(max_workers=8) as pool:
         for a, lid in targets:
             jobs[(a["idx"], lid, "series")] = pool.submit(q, a, lid, start, end, "net,orders", group)
-            if group != "day":
-                jobs[(a["idx"], lid, "tot")] = pool.submit(q, a, lid, start, end, "net,orders", "day")
-            jobs[(a["idx"], lid, "prev")] = pool.submit(q, a, lid, pstart, pend, "net,orders", "day")
+            jobs[(a["idx"], lid, "prev")] = pool.submit(q, a, lid, pstart, pend, "net,orders", group)
             jobs[(a["idx"], lid, "item")] = pool.submit(q, a, lid, start, end, "net", "item")
             if lid is None:
                 jobs[(a["idx"], lid, "loc")] = pool.submit(q, a, lid, start, end, "net,orders", "location")
@@ -285,22 +283,23 @@ def _build(period: str, loc: str) -> dict:
     tot = {"net": 0.0, "orders": 0.0}
     prev = {"net": 0.0, "orders": 0.0}
     for a, lid in targets:
+        def add(resp, into):
+            """Итог = сумма строк; если строк нет — поле totals из ответа."""
+            rows = _rows(resp, group)
+            if rows:
+                into["net"] += sum(r["net"] or 0 for r in rows)
+                into["orders"] += sum(r["orders"] or 0 for r in rows)
+            else:
+                t = _totals(resp)
+                into["net"] += t["net"] or 0
+                into["orders"] += t["orders"] or 0
+            return rows
         s = get((a["idx"], lid, "series"))
         if s:
-            series.append(_rows(s, group))
-        src = get((a["idx"], lid, "tot")) if (a["idx"], lid, "tot") in jobs else s
-        if src:
-            rows = _rows(src, "day")
-            t = _totals(src)
-            net = t["net"] if t["net"] else sum(r["net"] for r in rows)
-            orders = t["orders"] if t["orders"] else sum(r["orders"] or 0 for r in rows)
-            tot["net"] += net or 0
-            tot["orders"] += orders or 0
+            series.append(add(s, tot))
         p = get((a["idx"], lid, "prev"))
         if p:
-            t = _totals(p); rows = _rows(p, "day")
-            prev["net"] += t["net"] if t["net"] is not None else sum(r["net"] for r in rows)
-            prev["orders"] += t["orders"] if t["orders"] is not None else sum(r["orders"] or 0 for r in rows)
+            add(p, prev)
         it = get((a["idx"], lid, "item"))
         if it:
             items.append(_rows(it, "item", item_names(a)))
