@@ -238,7 +238,7 @@ def report(period: str = "week", loc: str = "all") -> dict:
     """Отчёт за период по всем точкам или одной (loc = 'acc:location_id')."""
     if not connected():
         return {"connected": False}
-    return _cached(f"rep:{period}:{loc}", lambda: _build(period, loc))
+    return _cached(f"rep:{period}:{loc}", lambda: _build(period, loc), 25 if period == "today" else CACHE_SECONDS)
 
 
 def _build(period: str, loc: str) -> dict:
@@ -466,7 +466,7 @@ def _moments_receipts(resp):
 def shift_report(period: str = "week", loc: str = "all") -> dict:
     if not connected():
         return {"connected": False}
-    return _cached(f"shift:{period}:{loc}", lambda: _build_shifts(period, loc))
+    return _cached(f"shift:{period}:{loc}", lambda: _build_shifts(period, loc), 25 if period in ("today", "yesterday") else CACHE_SECONDS)
 
 
 def _build_shifts(period: str, loc: str) -> dict:
@@ -533,3 +533,126 @@ def _build_shifts(period: str, loc: str) -> dict:
     cd, cs = _shift_of(now, cfg)
     res["current"] = {"date": cd.isoformat(), "shift": cs}
     return res
+
+
+# ---------------------------------------------------------------- заказы и товары
+def _pick(d: dict, *keys):
+    for k in keys:
+        cur = d
+        for part in k.split("."):
+            cur = cur.get(part) if isinstance(cur, dict) else None
+        if cur not in (None, ""):
+            return cur
+    return None
+
+
+def _money(v):
+    if isinstance(v, dict):
+        v = v.get("amount", v.get("value"))
+    return _num(v)
+
+
+def _targets(loc: str):
+    accs = accounts()
+    if loc and loc != "all" and ":" in loc:
+        ai, lid = loc.split(":", 1)
+        a = next((x for x in accs if str(x["idx"]) == ai), None)
+        if a:
+            return [(a, lid or None)]
+    return [(a, None) for a in accs]
+
+
+def orders(period: str = "today", loc: str = "all", limit: int = 150) -> dict:
+    if not connected():
+        return {"connected": False}
+    return _cached(f"orders:{period}:{loc}", lambda: _orders(period, loc, limit), 25)
+
+
+def _orders(period, loc, limit):
+    start, end, *_ = _range(period)
+    tz = os.getenv("APP_TZ_OFFSET", "+05:00")
+    after = f"{start.isoformat()}T00:00:00{tz}"
+    res = {"connected": True, "from": start.isoformat(), "to": end.isoformat(), "orders": [], "errors": [], "sample_keys": []}
+
+    def load(a, lid):
+        p = {"created_after": after, "limit": 200}
+        if lid:
+            p["location_id"] = lid
+        return _pages(a["key"], "/orders", p, 5).get("rows", [])
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futs = [(a, pool.submit(load, a, lid)) for a, lid in _targets(loc)]
+    for a, f in futs:
+        try:
+            rows = f.result()
+        except Exception as e:
+            res["errors"].append(f"{a['name']}: {e}")
+            continue
+        if rows and not res["sample_keys"]:
+            res["sample_keys"] = sorted(rows[0].keys())[:40]
+        for o in rows:
+            if not isinstance(o, dict) or o.get("deleted"):
+                continue
+            created = str(_pick(o, "created_at", "opened_at", "closed_at", "time", "date") or "")
+            if created[:10] and created[:10] > end.isoformat():
+                continue
+            lines = _pick(o, "lines", "items", "positions") or []
+            res["orders"].append({
+                "acc": a["idx"], "id": _pick(o, "id"), "number": _pick(o, "number", "num", "receipt_number"),
+                "point": a["name"], "status": _pick(o, "status", "state"),
+                "type": _pick(o, "fulfillment.type", "type", "source", "channel"),
+                "total": _money(_pick(o, "total", "total_with_tip", "sum", "amount", "net")),
+                "created": created, "lines": len(lines) if isinstance(lines, list) else None,
+                "customer": _pick(o, "customer.name", "client.name", "customer_name"),
+            })
+    res["orders"].sort(key=lambda o: o["created"] or "", reverse=True)
+    res["count"] = len(res["orders"])
+    res["sum"] = sum(o["total"] or 0 for o in res["orders"])
+    res["orders"] = res["orders"][:limit]
+    return res
+
+
+def order_detail(acc: int, oid: str) -> dict:
+    a = next((x for x in accounts() if x["idx"] == int(acc)), None)
+    if not a:
+        raise RuntimeError("Аккаунт не найден")
+    o = _get(a["key"], f"/orders/{oid}")
+    o = o.get("data", o) if isinstance(o, dict) and isinstance(o.get("data"), dict) else o
+    lines, names = [], item_names(a)
+    for ln in _pick(o, "lines", "items", "positions") or []:
+        if isinstance(ln, dict):
+            iid = _pick(ln, "item_id", "item.id")
+            lines.append({"name": _pick(ln, "name", "item.name", "title", "item_name") or names.get(str(iid)) or iid,
+                          "qty": _num(_pick(ln, "quantity", "qty", "count")),
+                          "price": _money(_pick(ln, "price", "unit_price")),
+                          "total": _money(_pick(ln, "total", "sum", "amount"))})
+    return {"order": o, "lines": lines}
+
+
+def items_report(period: str = "week", loc: str = "all") -> dict:
+    if not connected():
+        return {"connected": False}
+    return _cached(f"items:{period}:{loc}", lambda: _items(period, loc), 60 if period == "today" else 300)
+
+
+def _items(period, loc):
+    rep = report(period, loc)
+    sold = {r["label"]: r["net"] for r in rep.get("by_item", [])}
+    catalog = {}
+    errors = list(rep.get("errors", []))
+    for a, _ in _targets(loc):
+        try:
+            for it in _pages(a["key"], "/items", {}, 15).get("rows", []):
+                if not isinstance(it, dict) or it.get("deleted"):
+                    continue
+                name = it.get("name") or str(it.get("id"))
+                c = catalog.setdefault(name, {"name": name, "price": _money(it.get("price")), "category": _pick(it, "category.name", "category_name", "group.name"),
+                                              "points": [], "sold": 0.0})
+                if a["name"] not in c["points"]:
+                    c["points"].append(a["name"])
+        except Exception as e:
+            errors.append(f"{a['name']}: {e}")
+    for name, net in sold.items():
+        catalog.setdefault(name, {"name": name, "price": None, "category": None, "points": [], "sold": 0.0})["sold"] = net
+    items = sorted(catalog.values(), key=lambda x: (-(x["sold"] or 0), x["name"]))
+    return {"connected": True, "from": rep.get("from"), "to": rep.get("to"), "items": items, "errors": list(dict.fromkeys(errors))}

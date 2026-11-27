@@ -22,6 +22,7 @@ import whatsapp  # noqa: E402
 from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
+APP_VERSION = "2026-11-27.6"
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
@@ -102,6 +103,7 @@ def js_file(name: str):
 @app.get("/api/info")
 def info():
     return {
+        "version": APP_VERSION,
         "demo": agents.demo_mode(),
         "db": "postgres" if memory.USE_PG else "sqlite",
         "paloma": paloma.connected(),
@@ -189,6 +191,30 @@ def get_sales(period: str = "week", loc: str = "all"):
 def get_shifts(period: str = "week", loc: str = "all"):
     try:
         return paloma.shift_report(period, loc)
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+
+@app.get("/api/orders")
+def get_orders(period: str = "today", loc: str = "all"):
+    try:
+        return paloma.orders(period, loc)
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+
+@app.get("/api/orders/{acc}/{oid}")
+def get_order(acc: int, oid: str):
+    try:
+        return paloma.order_detail(acc, oid)
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+
+@app.get("/api/items")
+def get_items(period: str = "week", loc: str = "all"):
+    try:
+        return paloma.items_report(period, loc)
     except Exception as e:
         raise HTTPException(502, str(e))
 
