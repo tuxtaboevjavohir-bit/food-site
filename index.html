@@ -21,7 +21,7 @@
   .badge{border:1px solid var(--line)}
   .badge.demo{background:#3b2a0a;color:#fcd34d;border-color:#a16207}
   nav{margin-left:auto;display:flex;gap:6px}
-  nav button{background:none;border:1px solid var(--line);color:var(--mute);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:14px}
+  nav button{background:none;border:1px solid var(--line);color:var(--mute);padding:7px 11px;border-radius:8px;cursor:pointer;font-size:13px}
   nav button{transition:all .2s}
   nav button:hover{color:var(--txt);border-color:#22d3ee88}
   nav button.on{background:linear-gradient(135deg,var(--acc),var(--acc2));border-color:transparent;color:#020617;font-weight:700;box-shadow:0 0 16px #22d3ee55}
@@ -113,6 +113,19 @@
   .tstatus.on{display:flex}
   .spin{width:16px;height:16px;border:2px solid #22d3ee44;border-top-color:#22d3ee;border-radius:50%;animation:sp 1s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{background:none;border:0;color:var(--mute);padding:8px 12px;cursor:pointer;font-size:13px}
+  .seg button.on{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#020617;font-weight:700}
+  .up{color:#34d399;font-size:12px;font-weight:600}.down{color:#f87171;font-size:12px;font-weight:600}
+  .stform{display:grid;grid-template-columns:2fr 1.3fr 1fr .8fr 1fr 1.4fr auto auto;gap:8px;margin:8px 0}
+  .stform input,.stform select{background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:9px;font:inherit;min-width:0}
+  input[type=number]{background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px;font:inherit}
+  .st-low td{background:#450a0a55}
+  .st-act button{background:none;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:3px 9px;cursor:pointer;margin-right:4px}
+  .st-act button:hover{border-color:var(--acc)}
+  .st-move{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .st-move input{width:110px}
+  @media (max-width:900px){.stform{grid-template-columns:1fr 1fr}}
 </style>
 
 </head>
@@ -123,6 +136,7 @@
   <nav>
     <button data-tab="hq" class="on" data-i18n="tab_hq">Штаб</button>
     <button data-tab="sales" data-i18n="tab_sales">Продажи</button>
+    <button data-tab="stock" data-i18n="tab_stock">Склад</button>
     <button data-tab="wa">WhatsApp</button>
     <button data-tab="menu" data-i18n="tab_menu">Меню</button>
     <button data-tab="mem" data-i18n="tab_mem">Память</button>
@@ -146,15 +160,44 @@
 
   <!-- ПРОДАЖИ -->
   <section id="sales" class="tab">
-    <div class="row" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:14px">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
       <h2 style="margin:0" data-i18n="sales_h">Продажи из Paloma365</h2>
-      <div class="row">
-        <select id="salesDays"><option value="7">7</option><option value="30" selected>30</option><option value="92">92</option></select>
-        <small data-i18n="days">дней</small>
+      <div class="row" style="flex-wrap:wrap;gap:8px">
+        <div class="seg" id="salesPeriod">
+          <button data-p="today" data-i18n="p_today">Сегодня</button><button data-p="yesterday" data-i18n="p_yesterday">Вчера</button><button data-p="week" class="on" data-i18n="p_week">Неделя</button><button data-p="month" data-i18n="p_month">Месяц</button>
+        </div>
+        <select id="salesLoc"><option value="all" data-i18n="all_points">Все точки</option></select>
         <button class="main" id="salesBtn" style="padding:8px 16px" data-i18n="refresh">Обновить</button>
       </div>
     </div>
     <div id="salesBox"></div>
+  </section>
+
+  <!-- СКЛАД -->
+  <section id="stock" class="tab">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <h2 style="margin:0" data-i18n="stock_h">Склад</h2>
+      <div class="row" style="flex-wrap:wrap;gap:8px">
+        <select id="stFilter"></select>
+        <input type="text" id="stSearch" data-i18n-ph="st_search" placeholder="Поиск…" style="max-width:180px;padding:8px">
+        <button class="main" id="stAsk" style="padding:8px 14px" data-i18n="st_ask">🤖 Что закупить?</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3 id="stFormTitle" data-i18n="st_add">Добавить продукт</h3>
+      <div class="stform">
+        <input type="text" id="stName" data-i18n-ph="st_name" placeholder="Название">
+        <input type="text" id="stCat" data-i18n-ph="st_cat" placeholder="Категория">
+        <input type="number" id="stQty" step="any" min="0" data-i18n-ph="st_qty" placeholder="Количество">
+        <select id="stUnit"></select>
+        <input type="number" id="stMin" step="any" min="0" data-i18n-ph="st_min" placeholder="Минимум">
+        <select id="stPoint"></select>
+        <button class="main" id="stSave" style="padding:10px 16px" data-i18n="st_btn_add">Добавить</button>
+        <button id="stCancel" class="copy" style="display:none;float:none" data-i18n="st_cancel">Отмена</button>
+      </div>
+      <small data-i18n="st_hint">Минимум — при каком остатке подсвечивать красным и подсказывать закупщику.</small>
+    </div>
+    <div id="stTable"></div>
   </section>
 
   <!-- WHATSAPP -->
@@ -258,6 +301,7 @@ document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () =>
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === b.dataset.tab));
   if (b.dataset.tab === "menu") loadMenu();
   if (b.dataset.tab === "sales") loadSales();
+  if (b.dataset.tab === "stock") loadStock();
   if (b.dataset.tab === "wa") loadWA();
   if (b.dataset.tab === "mem") loadFacts();
   if (b.dataset.tab === "hist") loadHistory();
@@ -266,6 +310,14 @@ document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () =>
 // ---------- языки: русский / қазақша ----------
 const I18N = {
   ru: {
+    tab_stock:"Склад", p_today:"Сегодня", p_yesterday:"Вчера", p_week:"Неделя", p_month:"Месяц", all_points:"Все точки", point:"Точка",
+    k_prev:"Прошлый период", t_hourly:"Выручка по часам", t_points:"По точкам",
+    stock_h:"Склад", st_search:"Поиск…", st_ask:"🤖 Что закупить?", st_add:"Добавить продукт", st_name:"Название", st_cat:"Категория",
+    st_qty:"Количество", st_min:"Минимум", st_btn_add:"Добавить", st_btn_save:"Сохранить", st_cancel:"Отмена", no_point:"без точки",
+    st_hint:"Минимум — при каком остатке подсвечивать красным и подсказывать закупщику.", st_rest:"Остаток", st_low:"Заканчивается позиций",
+    st_in:"Приход", st_out:"Расход", st_edit:"Изменить", st_del:"Удалить", st_confirm:"Удалить", st_note:"комментарий", st_empty:"На складе пока пусто — добавьте первый продукт выше.",
+    st_task:"Проверь склад и продажи и составь список закупок на неделю: что заканчивается, сколько купить",
+    u_g:"г", u_kg:"кг", u_pcs:"шт", u_l:"л", u_ml:"мл",
     title:"штаб агентов", tab_hq:"Штаб", tab_sales:"Продажи", tab_menu:"Меню", tab_mem:"Память", tab_hist:"История",
     task_ph:"Задача для команды, например: придумай новое блюдо, посчитай себестоимость и сними про него видео для TikTok",
     send:"Поручить", working:"Агенты работают", sec:"сек", ready:"готово", sales_h:"Продажи из Paloma365", days:"дней", refresh:"Обновить",
@@ -307,6 +359,14 @@ const I18N = {
     names:{}
   },
   kk: {
+    tab_stock:"Қойма", p_today:"Бүгін", p_yesterday:"Кеше", p_week:"Апта", p_month:"Ай", all_points:"Барлық нүктелер", point:"Нүкте",
+    k_prev:"Өткен кезең", t_hourly:"Сағат бойынша түсім", t_points:"Нүктелер бойынша",
+    stock_h:"Қойма", st_search:"Іздеу…", st_ask:"🤖 Не сатып алу керек?", st_add:"Өнім қосу", st_name:"Атауы", st_cat:"Санат",
+    st_qty:"Саны", st_min:"Минимум", st_btn_add:"Қосу", st_btn_save:"Сақтау", st_cancel:"Болдырмау", no_point:"нүктесіз",
+    st_hint:"Минимум — қалдық қаншаға жеткенде қызылмен белгілеп, сатып алушыға ескерту керек.", st_rest:"Қалдық", st_low:"Таусылып жатқан позициялар",
+    st_in:"Кіріс", st_out:"Шығыс", st_edit:"Өзгерту", st_del:"Жою", st_confirm:"Жою", st_note:"түсініктеме", st_empty:"Қойма әзірге бос — жоғарыда бірінші өнімді қосыңыз.",
+    st_task:"Қойма мен сатылымды тексеріп, бір аптаға сатып алу тізімін жаса: не таусылып жатыр, қанша алу керек",
+    u_g:"г", u_kg:"кг", u_pcs:"дана", u_l:"л", u_ml:"мл",
     title:"агенттер штабы", tab_hq:"Штаб", tab_sales:"Сатылым", tab_menu:"Мәзір", tab_mem:"Жады", tab_hist:"Тарих",
     task_ph:"Командаға тапсырма, мысалы: жаңа тағам ойлап тап, өзіндік құнын есепте және ол туралы TikTok-қа видео түсір",
     send:"Тапсыру", working:"Агенттер жұмыс істеп жатыр", sec:"сек", ready:"дайын", sales_h:"Paloma365 сатылымдары", days:"күн", refresh:"Жаңарту",
@@ -363,7 +423,7 @@ function applyLang(){
     OFFICE.setNames(NAME);
   if (INFO) setBadge();
   const on = document.querySelector("nav button.on[data-tab]")?.dataset.tab;
-  if (on === "menu") loadMenu(); if (on === "hist") loadHistory(); if (on === "sales") loadSales(); if (on === "wa") loadWA();
+  if (on === "menu") loadMenu(); if (on === "hist") loadHistory(); if (on === "sales") loadSales(); if (on === "wa") loadWA(); if (on === "stock") { unitOptions($("#stUnit")); loadStock(); }
 }
 document.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
   LANG = b.dataset.lang; try { localStorage.setItem("fh_lang", LANG); } catch {} applyLang();
@@ -398,49 +458,150 @@ function table(rows, max=60){
   return `<div class="md"><table><tr>${cols.map(c => `<th>${esc(c)}</th>`).join("")}</tr>${fr.map(r => `<tr>${cols.map(c => `<td>${esc(r[c] ?? "")}</td>`).join("")}</tr>`).join("")}</table></div>`;
 }
 const pickKey = (keys, re, row) => keys.find(k => re.test(k) && num(row[k]) != null);
+// ---------- продажи: периоды и точки ----------
+let salesPeriod = "week";
+document.querySelectorAll("#salesPeriod button").forEach(b => b.onclick = () => {
+  salesPeriod = b.dataset.p; document.querySelectorAll("#salesPeriod button").forEach(x => x.classList.toggle("on", x === b)); loadSales();
+});
+let locsLoaded = false;
+async function loadLocations(){
+  if (locsLoaded) return;
+  try {
+    const d = await (await fetch("/api/locations")).json();
+    const sel = $("#salesLoc"), cur = sel.value;
+    sel.innerHTML = `<option value="all">${t("all_points")}</option>` + (d.locations || []).map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join("");
+    sel.value = cur || "all"; locsLoaded = d.connected;
+  } catch {}
+}
+const pct = (a, b) => (b ? (a - b) / b * 100 : null);
+const chg = (a, b) => { const p = pct(a, b); if (p == null || !isFinite(p)) return ""; return `<span class="${p >= 0 ? "up" : "down"}">${p >= 0 ? "▲" : "▼"} ${Math.abs(p).toFixed(1)}%</span>`; };
 async function loadSales(){
+  await loadLocations();
   const box = $("#salesBox"); box.innerHTML = `<small>${t("loading")}</small>`;
   let d;
-  try { const r = await fetch("/api/sales?days=" + $("#salesDays").value); d = await r.json(); if (!r.ok) throw new Error(d.detail); }
+  try { const r = await fetch(`/api/sales?period=${salesPeriod}&loc=${encodeURIComponent($("#salesLoc").value)}`); d = await r.json(); if (!r.ok) throw new Error(d.detail); }
   catch (e) { box.innerHTML = `<div class="card err">${t("error")}: ${esc(e.message)}</div>`; return; }
   if (!d.connected) { box.innerHTML = t("sales_off"); return; }
   const WD = LANG === "kk" ? ["", "Дс", "Сс", "Ср", "Бс", "Жм", "Сб", "Жс"] : ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-  const dayLbl = l => /^\d{4}-\d{2}-\d{2}/.test(l) ? l.slice(8, 10) + "." + l.slice(5, 7) : l;
-  let html = "";
-  const daily = d.daily?.rows || [];
-  if (daily.length) {
-    const vals = daily.map(r => r.net || 0), max = Math.max(...vals, 1);
-    const sum = d.daily.totals.net ?? vals.reduce((a, b) => a + b, 0);
-    const orders = d.daily.totals.orders ?? daily.reduce((a, r) => a + (r.orders || 0), 0);
-    const active = vals.filter(v => v > 0).length;
-    html += `<div class="kpis"><div class="kpi"><small>${t("k_rev")}</small><b>${fmt(sum)} ₸</b></div>
-      <div class="kpi"><small>${t("k_avg")}</small><b>${fmt(active ? sum / active : 0)} ₸</b></div>
-      <div class="kpi"><small>${t("k_orders")}</small><b>${fmt(orders)}</b></div>
-      <div class="kpi"><small>${t("k_check")}</small><b>${fmt(orders ? sum / orders : 0)} ₸</b></div></div>
-      <div class="card"><h3>${t("t_daily")}</h3><div class="bars">${daily.map((r, i) => `<div class="bar" style="height:${Math.max(2, vals[i] / max * 100)}%" data-t="${esc(dayLbl(r.label))}: ${fmt(vals[i])} ₸ · ${fmt(r.orders)}"></div>`).join("")}</div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin-top:4px"><span>${esc(dayLbl(daily[0].label))}</span><span>${esc(dayLbl(daily[daily.length - 1].label))}</span></div></div>`;
+  const lbl = r => d.group === "hour" ? (typeof r.id === "number" ? String(r.id).padStart(2, "0") + ":00" : String(r.label).slice(-5))
+    : (/^\d{4}-\d{2}-\d{2}/.test(r.label) ? r.label.slice(8, 10) + "." + r.label.slice(5, 7) : r.label);
+  const T = d.totals || {}, P = d.prev || {}, avg = T.orders ? T.net / T.orders : 0, pavg = P.orders ? P.net / P.orders : 0;
+  const range = d.from === d.to ? d.from : `${d.from} — ${d.to}`;
+  let html = `<div class="kpis">
+    <div class="kpi"><small>${t("k_rev")} · ${esc(range)}</small><b>${fmt(T.net)} ₸</b>${chg(T.net, P.net)}</div>
+    <div class="kpi"><small>${t("k_orders")}</small><b>${fmt(T.orders)}</b>${chg(T.orders, P.orders)}</div>
+    <div class="kpi"><small>${t("k_check")}</small><b>${fmt(avg)} ₸</b>${chg(avg, pavg)}</div>
+    <div class="kpi"><small>${t("k_prev")}</small><b style="font-size:16px">${fmt(P.net)} ₸</b><small>${esc(d.prev_from)} — ${esc(d.prev_to)}</small></div></div>`;
+  const ser = d.series || [];
+  if (ser.length) {
+    const mx = Math.max(...ser.map(r => r.net || 0), 1);
+    html += `<div class="card"><h3>${d.group === "hour" ? t("t_hourly") : t("t_daily")}</h3><div class="bars">${ser.map(r => `<div class="bar" style="height:${Math.max(2, (r.net || 0) / mx * 100)}%" data-t="${esc(lbl(r))}: ${fmt(r.net)} ₸ · ${fmt(r.orders)}"></div>`).join("")}</div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin-top:4px"><span>${esc(lbl(ser[0]))}</span><span>${esc(lbl(ser[ser.length - 1]))}</span></div></div>`;
   }
-  const items = d.by_item?.rows || [];
+  const locs = d.by_location || [];
+  if (locs.length > 1) {
+    const tot = locs.reduce((a, r) => a + (r.net || 0), 0) || 1, mx = Math.max(...locs.map(r => r.net || 0), 1);
+    html += `<div class="card"><h3>${t("t_points")}</h3><div class="md"><table><tr><th>${t("point")}</th><th>${t("k_rev")}</th><th>${t("k_orders")}</th><th>${t("k_check")}</th><th>%</th><th style="width:30%"></th></tr>
+      ${locs.map(r => `<tr><td>${esc(r.label)}</td><td>${fmt(r.net)} ₸</td><td>${fmt(r.orders)}</td><td>${r.orders ? fmt(r.net / r.orders) + " ₸" : "—"}</td><td>${((r.net || 0) / tot * 100).toFixed(1)}</td>
+      <td><div style="height:8px;border-radius:4px;background:linear-gradient(90deg,var(--acc),var(--acc2));width:${(r.net || 0) / mx * 100}%"></div></td></tr>`).join("")}</table></div></div>`;
+  }
+  const items = d.by_item || [];
   if (items.length) {
     const top = items.slice(0, 30), mx = Math.max(...top.map(r => r.net || 0), 1), tot = items.reduce((a, r) => a + (r.net || 0), 0) || 1;
     html += `<div class="card"><h3>${t("t_items")}</h3><div class="md"><table><tr><th>#</th><th>${t("m_dish")}</th><th>${t("k_rev")}</th><th>%</th><th style="width:40%"></th></tr>
       ${top.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.label)}</td><td>${fmt(r.net)} ₸</td><td>${((r.net || 0) / tot * 100).toFixed(1)}</td>
-        <td><div style="height:8px;border-radius:4px;background:linear-gradient(90deg,var(--acc),var(--acc2));width:${(r.net || 0) / mx * 100}%"></div></td></tr>`).join("")}
-      </table></div></div>`;
+        <td><div style="height:8px;border-radius:4px;background:linear-gradient(90deg,var(--acc),var(--acc2));width:${(r.net || 0) / mx * 100}%"></div></td></tr>`).join("")}</table></div></div>`;
   }
-  const week = d.by_weekday?.rows || [];
+  const week = d.by_weekday || [];
   if (week.length) {
-    const mx = Math.max(...week.map(r => r.net || 0), 1);
-    html += `<div class="card"><h3>${t("t_week")}</h3><div class="bars" style="height:140px">${week.map(r => {
-      const lbl = typeof r.id === "number" && WD[r.id] ? WD[r.id] : r.label;
-      return `<div class="bar" style="height:${Math.max(2, (r.net || 0) / mx * 100)}%" data-t="${esc(lbl)}: ${fmt(r.net)} ₸ · ${fmt(r.orders)}"></div>`; }).join("")}</div>
-      <div style="display:flex;justify-content:space-around;font-size:12px;color:var(--mute);margin-top:4px">${week.map(r => `<span>${esc(typeof r.id === "number" && WD[r.id] ? WD[r.id] : r.label)}</span>`).join("")}</div></div>`;
+    const mx = Math.max(...week.map(r => r.net || 0), 1), wl = r => typeof r.id === "number" && WD[r.id] ? WD[r.id] : r.label;
+    html += `<div class="card"><h3>${t("t_week")}</h3><div class="bars" style="height:140px">${week.map(r => `<div class="bar" style="height:${Math.max(2, (r.net || 0) / mx * 100)}%" data-t="${esc(wl(r))}: ${fmt(r.net)} ₸ · ${fmt(r.orders)}"></div>`).join("")}</div>
+      <div style="display:flex;justify-content:space-around;font-size:12px;color:var(--mute);margin-top:4px">${week.map(r => `<span>${esc(wl(r))}</span>`).join("")}</div></div>`;
   }
   if (d.errors?.length) html += `<details class="card"><summary>${t("sales_warn")}</summary><div style="color:#fca5a5;font-size:13px;margin-top:8px">${d.errors.map(esc).join("<br>")}</div></details>`;
-  if (!html) html = `<div class="card"><pre style="white-space:pre-wrap">${esc(JSON.stringify(d, null, 2)).slice(0, 5000)}</pre></div>`;
   box.innerHTML = html;
 }
-$("#salesBtn").onclick = loadSales; $("#salesDays").onchange = loadSales;
+$("#salesBtn").onclick = loadSales; $("#salesLoc").onchange = loadSales;
+
+// ---------- склад ----------
+const UNIT_GROUP = {g:"w", kg:"w", ml:"v", l:"v", pcs:"p"};
+const uName = u => t("u_" + u);
+let STOCK = [], POINTS = [], stEdit = null;
+function unitOptions(sel, only){
+  sel.innerHTML = ["g", "kg", "pcs", "l", "ml"].filter(u => !only || UNIT_GROUP[u] === UNIT_GROUP[only]).map(u => `<option value="${u}">${uName(u)}</option>`).join("");
+  if (only) sel.value = only;
+}
+function fmtQty(q, u){
+  q = +q || 0;
+  const n = v => (+v.toFixed(3)).toLocaleString("ru-RU");
+  if (u === "g" && q >= 1000) return `${n(q / 1000)} ${uName("kg")} <small>(${n(q)} ${uName("g")})</small>`;
+  if (u === "ml" && q >= 1000) return `${n(q / 1000)} ${uName("l")} <small>(${n(q)} ${uName("ml")})</small>`;
+  return `${n(q)} ${uName(u)}`;
+}
+async function loadStock(){
+  const d = await (await fetch("/api/stock")).json();
+  STOCK = d.items; POINTS = d.points;
+  const f = $("#stFilter"), cur = f.value;
+  f.innerHTML = `<option value="">${t("all_points")}</option>` + POINTS.map(p => `<option>${esc(p)}</option>`).join("");
+  f.value = cur;
+  const ps = $("#stPoint"), pcur = ps.value;
+  ps.innerHTML = POINTS.map(p => `<option>${esc(p)}</option>`).join("") + `<option value="">${t("no_point")}</option>`;
+  if (pcur || pcur === "") ps.value = pcur || POINTS[0] || "";
+  if (!$("#stUnit").options.length) unitOptions($("#stUnit"));
+  renderStock();
+}
+function renderStock(){
+  const pf = $("#stFilter").value, q = $("#stSearch").value.trim().toLowerCase();
+  const rows = STOCK.filter(r => (!pf || r.point === pf) && (!q || (r.name + " " + (r.category || "")).toLowerCase().includes(q)));
+  const low = rows.filter(r => r.min_qty != null && r.qty <= r.min_qty).length;
+  $("#stTable").innerHTML = (low ? `<div class="card err">⚠️ ${t("st_low")}: ${low}</div>` : "") + (rows.length ? `<div class="card"><div class="md"><table>
+    <tr><th>${t("st_name")}</th><th>${t("st_cat")}</th><th>${t("point")}</th><th>${t("st_rest")}</th><th>${t("st_min")}</th><th></th></tr>
+    ${rows.map(r => `<tr class="${r.min_qty != null && r.qty <= r.min_qty ? "st-low" : ""}" id="st${r.id}"><td><b>${esc(r.name)}</b></td><td>${esc(r.category || "")}</td><td>${esc(r.point || "—")}</td>
+      <td>${fmtQty(r.qty, r.unit)}${r.min_qty != null && r.qty <= r.min_qty ? " ⚠️" : ""}</td><td>${r.min_qty != null ? fmtQty(r.min_qty, r.unit) : "—"}</td>
+      <td class="st-act"><button title="${t("st_in")}" data-a="in" data-id="${r.id}">＋</button><button title="${t("st_out")}" data-a="out" data-id="${r.id}">－</button><button title="${t("st_edit")}" data-a="edit" data-id="${r.id}">✎</button><button title="${t("st_del")}" data-a="del" data-id="${r.id}">🗑</button></td></tr>`).join("")}
+  </table></div></div>` : `<div class="card"><small>${t("st_empty")}</small></div>`);
+  document.querySelectorAll(".st-act button").forEach(b => b.onclick = () => stAction(b.dataset.a, +b.dataset.id));
+}
+async function stCall(url, method, body){
+  const r = await fetch(url, {method, headers:{"Content-Type":"application/json"}, body: body ? JSON.stringify(body) : undefined});
+  const d = await r.json(); if (!r.ok) throw new Error(d.detail || r.statusText); STOCK = d.items; renderStock();
+}
+function stAction(a, id){
+  const r = STOCK.find(x => x.id === id); if (!r) return;
+  if (a === "del") { if (confirm(t("st_confirm") + " «" + r.name + "»?")) stCall("/api/stock/" + id, "DELETE").catch(e => alert(e.message)); return; }
+  if (a === "edit") {
+    stEdit = id; $("#stName").value = r.name; $("#stCat").value = r.category || ""; $("#stQty").value = r.qty; unitOptions($("#stUnit")); $("#stUnit").value = r.unit;
+    $("#stMin").value = r.min_qty ?? ""; $("#stPoint").value = r.point || ""; $("#stSave").textContent = t("st_btn_save"); $("#stFormTitle").textContent = t("st_edit") + ": " + r.name;
+    $("#stCancel").style.display = ""; window.scrollTo({top: $("#stock").offsetTop - 80, behavior: "smooth"}); return;
+  }
+  document.querySelectorAll(".st-moverow").forEach(e => e.remove());
+  const tr = document.createElement("tr"); tr.className = "st-moverow";
+  tr.innerHTML = `<td colspan="6"><div class="st-move"><b>${a === "in" ? "＋ " + t("st_in") : "－ " + t("st_out")}: ${esc(r.name)}</b>
+    <input type="number" step="any" min="0" placeholder="0" class="mvAmt"><select class="mvUnit"></select>
+    <input type="text" class="mvNote" placeholder="${t("st_note")}" style="width:180px;background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:7px">
+    <button class="main mvOk" style="padding:7px 14px">OK</button><button class="copy mvX" style="float:none">${t("st_cancel")}</button></div></td>`;
+  $("#st" + id).after(tr);
+  unitOptions(tr.querySelector(".mvUnit"), r.unit); tr.querySelector(".mvAmt").focus();
+  tr.querySelector(".mvX").onclick = () => tr.remove();
+  const ok = () => { const v = parseFloat(tr.querySelector(".mvAmt").value); if (!(v > 0)) return;
+    stCall(`/api/stock/${id}/move`, "POST", {amount: a === "in" ? v : -v, unit: tr.querySelector(".mvUnit").value, note: tr.querySelector(".mvNote").value}).catch(e => alert(e.message)); };
+  tr.querySelector(".mvOk").onclick = ok; tr.querySelector(".mvAmt").onkeydown = e => e.key === "Enter" && ok();
+}
+function stReset(){ stEdit = null; ["#stName", "#stCat", "#stQty", "#stMin"].forEach(s => $(s).value = ""); $("#stSave").textContent = t("st_btn_add"); $("#stFormTitle").textContent = t("st_add"); $("#stCancel").style.display = "none"; }
+$("#stCancel").onclick = stReset;
+$("#stSave").onclick = async () => {
+  const name = $("#stName").value.trim(); if (!name) { $("#stName").focus(); return; }
+  const num = s => $(s).value === "" ? null : parseFloat($(s).value);
+  const body = {name, category: $("#stCat").value, qty: num("#stQty") || 0, unit: $("#stUnit").value, min_qty: num("#stMin"), point: $("#stPoint").value};
+  try { await stCall(stEdit ? "/api/stock/" + stEdit : "/api/stock", stEdit ? "PUT" : "POST", body); stReset(); } catch (e) { alert(e.message); }
+};
+$("#stName").onkeydown = $("#stQty").onkeydown = e => e.key === "Enter" && $("#stSave").click();
+$("#stFilter").onchange = renderStock; $("#stSearch").oninput = renderStock;
+$("#stAsk").onclick = () => {
+  document.querySelector('nav button[data-tab="hq"]').click();
+  $("#taskText").value = t("st_task") + ($("#stFilter").value ? " (" + $("#stFilter").value + ")" : ""); $("#taskText").focus();
+};
+
 
 // ---------- WhatsApp ----------
 let waPhone = null, waTimer = null;

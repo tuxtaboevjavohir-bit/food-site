@@ -1,35 +1,51 @@
-"""Интеграция с Paloma365: продажи по дням и по блюдам.
+"""Интеграция с Paloma365: точки, продажи за день / неделю / месяц, топ блюд.
 
 Ключ создаётся владельцем в кабинете Paloma365: «Подключённые приложения» → «Создать интеграцию»
-(начинается с ppik_). Нужны права reports:read и catalog:read. Ключ кладём в переменную PALOMA_API_KEY.
+(начинается с ppik_). Нужны права account:read, catalog:read, reports:read.
+
+PALOMA_API_KEY — один ключ, если все точки в одном аккаунте Paloma.
+Если точки в разных аккаунтах — несколько ключей через запятую, можно с названием:
+    PALOMA_API_KEY=Центр:ppik_aaa, Мега:ppik_bbb, Вокзал:ppik_ccc
+APP_TZ — часовой пояс для «сегодня/вчера» (по умолчанию Asia/Almaty, UTC+5).
 """
 import json
 import os
 import time
-from datetime import date, timedelta
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timedelta
 
 import httpx
 
 BASE = os.getenv("PALOMA_BASE_URL", "https://connect.paloma365.com/platform/v1").rstrip("/")
+CACHE_SECONDS = 300
 _cache: dict = {}
-CACHE_SECONDS = 600
 
 
-def key() -> str:
-    return os.getenv("PALOMA_API_KEY", "").strip()
+# ---------------------------------------------------------------- ключи и запросы
+def accounts() -> list[dict]:
+    """[{idx, name, key}] из PALOMA_API_KEY."""
+    raw = os.getenv("PALOMA_API_KEY", "").replace("\n", ",")
+    out = []
+    for i, part in enumerate(p.strip() for p in raw.split(",") if p.strip()):
+        name, key = (part.split(":", 1) if ":" in part and not part.startswith("ppik_") else (f"Аккаунт {i + 1}", part))
+        out.append({"idx": i, "name": name.strip(), "key": key.strip()})
+    return out
 
 
 def connected() -> bool:
-    return bool(key())
+    return bool(accounts())
 
 
-def _get(path: str, params: dict | None = None):
-    r = httpx.get(
-        BASE + path,
-        params=params or {},
-        headers={"Authorization": f"Bearer {key()}", "Accept": "application/json"},
-        timeout=30,
-    )
+def today() -> date:
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo(os.getenv("APP_TZ", "Asia/Almaty"))).date()
+    except Exception:
+        return (datetime.utcnow() + timedelta(hours=5)).date()
+
+
+def _get(key: str, path: str, params: dict | None = None):
+    r = httpx.get(BASE + path, params=params or {}, headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, timeout=30)
     if r.status_code >= 400:
         try:
             err = r.json().get("error", {})
@@ -54,15 +70,14 @@ def _unwrap(page):
     return page
 
 
-def _all_pages(path: str, params: dict, max_pages: int = 10):
-    """Собирает все страницы ответа (rows или data; cursor / next_cursor)."""
+def _pages(key: str, path: str, params: dict, max_pages: int = 10) -> dict:
     first, rows_all, cursor = None, [], None
     for _ in range(max_pages):
         p = dict(params)
         p.setdefault("limit", 200)
         if cursor:
             p["cursor"] = cursor
-        raw = _get(path, p)
+        raw = _get(key, path, p)
         page = _unwrap(raw)
         first = first or page
         rows = page.get("rows") if isinstance(page.get("rows"), list) else page.get("data")
@@ -71,17 +86,9 @@ def _all_pages(path: str, params: dict, max_pages: int = 10):
         cursor = page.get("next_cursor") or (raw.get("next_cursor") if isinstance(raw, dict) else None)
         if not cursor:
             break
-    if first is not None:
-        key = "rows" if isinstance(first.get("rows"), list) or not isinstance(first.get("data"), list) else "data"
-        first = dict(first, **{key: rows_all})
+    first = dict(first or {})
+    first["rows"] = rows_all
     return first
-
-
-def raw(group_by: str = "day", days: int = 7, metrics: str = "net,orders"):
-    """Сырой ответ Paloma — для диагностики."""
-    to = date.today()
-    frm = to - timedelta(days=max(1, min(int(days), 92)) - 1)
-    return _get("/reports/metrics", {"from": frm.isoformat(), "to": to.isoformat(), "metrics": metrics, "group_by": group_by})
 
 
 def _num(v):
@@ -91,112 +98,240 @@ def _num(v):
         return None
 
 
-def _label(d):
+def _dim(row: dict, dim: str):
+    dims = row.get("dims") or row.get("key") or {}
+    d = dims.get(dim) if isinstance(dims, dict) and dim in dims else (next(iter(dims.values())) if isinstance(dims, dict) and dims else None)
     if isinstance(d, dict):
+        rid = d.get("id")
         for k in ("name", "title", "label", "date", "value", "id"):
             if d.get(k) not in (None, ""):
-                return d[k], d.get("id")
-        return json.dumps(d, ensure_ascii=False), None
-    return d, d
+                return str(d[k]), rid
+        return json.dumps(d, ensure_ascii=False), rid
+    return str(d), d
 
 
-def _norm(resp: dict, dim: str, names: dict | None = None) -> dict:
-    """Приводит ответ отчёта к виду {rows: [{label, id, net, orders}], totals: {net, orders}}."""
-    rows = resp.get("rows") if isinstance(resp.get("rows"), list) else resp.get("data") or []
+def _rows(resp: dict, dim: str, names: dict | None = None) -> list[dict]:
     out = []
-    for r in rows:
-        dims = r.get("dims") or r.get("key") or {}
-        d = dims.get(dim) if isinstance(dims, dict) and dim in dims else (next(iter(dims.values())) if isinstance(dims, dict) and dims else None)
-        label, rid = _label(d)
+    for r in resp.get("rows", []):
+        label, rid = _dim(r, dim)
         if names and str(rid) in names:
             label = names[str(rid)]
-        vals = r.get("values") or {}
-        out.append({"label": str(label), "id": rid, "net": _num(vals.get("net")), "orders": _num(vals.get("orders"))})
-    tot = (resp.get("totals") or {})
-    tot = tot.get("values", tot) if isinstance(tot, dict) else {}
-    return {"rows": out, "totals": {"net": _num(tot.get("net")), "orders": _num(tot.get("orders"))}}
+        v = r.get("values") or {}
+        out.append({"label": label, "id": rid, "net": _num(v.get("net")) or 0.0, "orders": _num(v.get("orders"))})
+    return out
 
 
-_items_cache = {"t": 0, "names": {}}
+def _totals(resp: dict) -> dict:
+    t = resp.get("totals") or {}
+    t = t.get("values", t) if isinstance(t, dict) else {}
+    return {"net": _num(t.get("net")), "orders": _num(t.get("orders"))}
 
 
-def item_names() -> dict:
-    """id → название блюда из каталога (кэш на час)."""
-    if time.time() - _items_cache["t"] < 3600 and _items_cache["names"]:
-        return _items_cache["names"]
-    names = {}
-    try:
-        data = _all_pages("/items", {}, 15)
-        for it in (data or {}).get("data", []) or (data or {}).get("rows", []):
-            if isinstance(it, dict) and not it.get("deleted") and it.get("id") is not None:
-                names[str(it["id"])] = it.get("name") or str(it["id"])
-    except Exception:
-        pass
-    _items_cache.update(t=time.time(), names=names)
-    return names
+def _cached(key, fn, ttl=CACHE_SECONDS):
+    hit = _cache.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    val = fn()
+    _cache[key] = (time.time(), val)
+    return val
 
 
-def sales(days: int = 30) -> dict:
-    """Выручка по дням, по блюдам и по дням недели за последние `days` дней (до 92)."""
+# ---------------------------------------------------------------- точки и каталог
+def locations() -> list[dict]:
+    """Все точки всех аккаунтов: [{id: 'acc:loc', name, account}]."""
+    def load():
+        out = []
+        for a in accounts():
+            try:
+                data = _get(a["key"], "/locations", {"limit": 200})
+                rows = data.get("data") if isinstance(data, dict) else None
+                for loc in rows or []:
+                    if isinstance(loc, dict) and not loc.get("deleted"):
+                        out.append({"id": f"{a['idx']}:{loc.get('id')}", "name": loc.get("name") or f"Точка {loc.get('id')}", "account": a["name"]})
+                if not rows:
+                    out.append({"id": f"{a['idx']}:", "name": a["name"], "account": a["name"]})
+            except Exception as e:
+                out.append({"id": f"{a['idx']}:", "name": a["name"], "account": a["name"], "error": str(e)})
+        return out
+    return _cached("locations", load, 3600)
+
+
+def item_names(acc: dict) -> dict:
+    def load():
+        names = {}
+        try:
+            for it in _pages(acc["key"], "/items", {}, 15).get("rows", []):
+                if isinstance(it, dict) and not it.get("deleted") and it.get("id") is not None:
+                    names[str(it["id"])] = it.get("name") or str(it["id"])
+        except Exception:
+            pass
+        return names
+    return _cached(f"items:{acc['idx']}", load, 3600)
+
+
+# ---------------------------------------------------------------- отчёты
+PERIODS = {"today": (1, 0, "hour"), "yesterday": (1, 1, "hour"), "week": (7, 0, "day"), "month": (30, 0, "day")}
+
+
+def _range(period: str):
+    days, back, group = PERIODS.get(period, PERIODS["week"])
+    end = today() - timedelta(days=back)
+    start = end - timedelta(days=days - 1)
+    prev_end = start - timedelta(days=1)
+    prev_start = prev_end - timedelta(days=days - 1)
+    return start, end, prev_start, prev_end, group
+
+
+def _merge(lists: list[list[dict]], sort_key=None) -> list[dict]:
+    acc = {}
+    for rows in lists:
+        for r in rows:
+            m = acc.setdefault(r["label"], {"label": r["label"], "id": r["id"], "net": 0.0, "orders": None})
+            m["net"] += r["net"] or 0
+            if r["orders"] is not None:
+                m["orders"] = (m["orders"] or 0) + r["orders"]
+    out = list(acc.values())
+    if sort_key == "net":
+        out.sort(key=lambda r: -r["net"])
+    else:
+        def k(r):
+            v = r["id"] if r["id"] is not None else r["label"]
+            try:
+                return (0, float(v), "")
+            except (TypeError, ValueError):
+                return (1, 0, str(v))
+        out.sort(key=k)
+    return out
+
+
+def report(period: str = "week", loc: str = "all") -> dict:
+    """Отчёт за период по всем точкам или одной (loc = 'acc:location_id')."""
     if not connected():
         return {"connected": False}
-    days = max(1, min(int(days), 92))
-    ck = f"sales:{days}"
-    if ck in _cache and time.time() - _cache[ck][0] < CACHE_SECONDS:
-        return _cache[ck][1]
-    to = date.today()
-    frm = to - timedelta(days=days - 1)
-    rng = {"from": frm.isoformat(), "to": to.isoformat()}
-    res = {"connected": True, "from": rng["from"], "to": rng["to"], "errors": []}
-    # по дням: отчёт metrics с разбивкой по дню (работает даже без обновления базы)
-    try:
-        res["daily"] = _norm(_all_pages("/reports/metrics", dict(rng, metrics="net,orders", group_by="day"), 3), "day")
-    except Exception as e:
-        res["errors"].append(str(e))
-    # по блюдам: только выручка (заказы по блюдам Paloma не считает)
-    try:
-        res["by_item"] = _norm(_all_pages("/reports/metrics", dict(rng, metrics="net", group_by="item"), 5), "item", item_names())
-        res["by_item"]["rows"].sort(key=lambda r: -(r["net"] or 0))
-    except Exception as e:
-        res["errors"].append(str(e))
-    try:
-        res["by_weekday"] = _norm(_all_pages("/reports/metrics", dict(rng, metrics="net,orders", group_by="weekday"), 1), "weekday")
-    except Exception as e:
-        res["errors"].append(str(e))
-    _cache[ck] = (time.time(), res)
+    return _cached(f"rep:{period}:{loc}", lambda: _build(period, loc))
+
+
+def _build(period: str, loc: str) -> dict:
+    start, end, pstart, pend, group = _range(period)
+    accs = accounts()
+    targets = []  # (account, location_id or None)
+    if loc and loc != "all" and ":" in loc:
+        ai, lid = loc.split(":", 1)
+        a = next((x for x in accs if str(x["idx"]) == ai), None)
+        if a:
+            targets.append((a, lid or None))
+    if not targets:
+        targets = [(a, None) for a in accs]
+    res = {"connected": True, "period": period, "from": start.isoformat(), "to": end.isoformat(),
+           "prev_from": pstart.isoformat(), "prev_to": pend.isoformat(), "group": group, "errors": []}
+
+    def q(a, lid, frm, to, metrics, group_by):
+        p = {"from": frm.isoformat(), "to": to.isoformat(), "metrics": metrics, "group_by": group_by}
+        if lid:
+            p["location_id"] = lid
+        return _pages(a["key"], "/reports/metrics", p, 5)
+
+    jobs = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for a, lid in targets:
+            jobs[(a["idx"], lid, "series")] = pool.submit(q, a, lid, start, end, "net,orders", group)
+            jobs[(a["idx"], lid, "prev")] = pool.submit(q, a, lid, pstart, pend, "net,orders", "day")
+            jobs[(a["idx"], lid, "item")] = pool.submit(q, a, lid, start, end, "net", "item")
+            if lid is None:
+                jobs[(a["idx"], lid, "loc")] = pool.submit(q, a, lid, start, end, "net,orders", "location")
+            if period == "month":
+                jobs[(a["idx"], lid, "wd")] = pool.submit(q, a, lid, start, end, "net,orders", "weekday")
+
+    def get(k):
+        try:
+            return jobs[k].result()
+        except Exception as e:
+            res["errors"].append(str(e))
+            return None
+
+    series, items, locs, wds = [], [], [], []
+    tot = {"net": 0.0, "orders": 0.0}
+    prev = {"net": 0.0, "orders": 0.0}
+    for a, lid in targets:
+        s = get((a["idx"], lid, "series"))
+        if s:
+            series.append(_rows(s, group))
+            t = _totals(s)
+            tot["net"] += t["net"] if t["net"] is not None else sum(r["net"] for r in series[-1])
+            tot["orders"] += t["orders"] if t["orders"] is not None else sum(r["orders"] or 0 for r in series[-1])
+        p = get((a["idx"], lid, "prev"))
+        if p:
+            t = _totals(p); rows = _rows(p, "day")
+            prev["net"] += t["net"] if t["net"] is not None else sum(r["net"] for r in rows)
+            prev["orders"] += t["orders"] if t["orders"] is not None else sum(r["orders"] or 0 for r in rows)
+        it = get((a["idx"], lid, "item"))
+        if it:
+            items.append(_rows(it, "item", item_names(a)))
+        if (a["idx"], lid, "loc") in jobs:
+            lr = get((a["idx"], lid, "loc"))
+            if lr:
+                rows = _rows(lr, "location")
+                if len(accounts()) > 1 and len(rows) <= 1:
+                    for r in rows:
+                        r["label"] = a["name"] if r["label"] in ("None", "") else r["label"]
+                locs.append(rows)
+        if (a["idx"], lid, "wd") in jobs:
+            w = get((a["idx"], lid, "wd"))
+            if w:
+                wds.append(_rows(w, "weekday"))
+    res["totals"] = tot
+    res["prev"] = prev
+    res["series"] = _merge(series)
+    res["by_item"] = _merge(items, "net")
+    res["by_location"] = _merge(locs, "net")
+    res["by_weekday"] = _merge(wds) if wds else []
+    res["errors"] = list(dict.fromkeys(res["errors"]))
     return res
 
 
+def raw(group_by: str = "day", days: int = 7, metrics: str = "net,orders"):
+    a = accounts()[0]
+    to = today()
+    frm = to - timedelta(days=max(1, min(int(days), 92)) - 1)
+    return _get(a["key"], "/reports/metrics", {"from": frm.isoformat(), "to": to.isoformat(), "metrics": metrics, "group_by": group_by})
+
+
 def check() -> dict:
-    """Проверка ключа: GET /me."""
     if not connected():
         return {"ok": False, "error": "PALOMA_API_KEY не задан"}
-    try:
-        return {"ok": True, "me": _get("/me")}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    out = []
+    for a in accounts():
+        try:
+            out.append({"account": a["name"], "ok": True, "me": _get(a["key"], "/me")})
+        except Exception as e:
+            out.append({"account": a["name"], "ok": False, "error": str(e)})
+    return {"ok": all(x["ok"] for x in out), "accounts": out, "locations": locations()}
 
 
+# ---------------------------------------------------------------- для агентов
 def context_for_agents(max_rows: int = 40) -> str:
-    """Краткая выжимка продаж для агентов: суммы по дням, топ блюд, дни недели."""
     if not connected():
         return ""
-    try:
-        s = sales(30)
-    except Exception as e:
-        return f"\nПРОДАЖИ (Paloma365): ошибка загрузки — {e}"
     f = lambda v: "—" if v is None else f"{v:,.0f}".replace(",", " ")
     wd = {1: "Пн", 2: "Вт", 3: "Ср", 4: "Чт", 5: "Пт", 6: "Сб", 7: "Вс"}
-    lines = [f"\nПРОДАЖИ из кассы Paloma365 за {s['from']} — {s['to']} (₸):"]
-    if s.get("daily"):
-        t = s["daily"]["totals"]
-        lines.append(f"Итого: выручка {f(t['net'])} ₸, заказов {f(t['orders'])}")
-        lines.append("По дням: " + "; ".join(f"{r['label']}: {f(r['net'])} ₸/{f(r['orders'])} зак." for r in s["daily"]["rows"][-31:]))
-    if s.get("by_item"):
-        lines.append("Топ блюд по выручке: " + "; ".join(f"{r['label']}: {f(r['net'])} ₸" for r in s["by_item"]["rows"][:max_rows]))
-    if s.get("by_weekday"):
-        lines.append("По дням недели: " + "; ".join(
-            f"{wd.get(r['id'], r['label']) if isinstance(r['id'], int) else r['label']}: {f(r['net'])} ₸/{f(r['orders'])} зак." for r in s["by_weekday"]["rows"]))
-    if s.get("errors"):
-        lines.append("(часть отчётов недоступна: " + "; ".join(s["errors"])[:300] + ")")
+    lines = ["\nПРОДАЖИ из кассы Paloma365 (₸):"]
+    try:
+        for period, title in (("today", "Сегодня"), ("yesterday", "Вчера"), ("week", "Последние 7 дней"), ("month", "Последние 30 дней")):
+            r = report(period, "all")
+            t, p = r.get("totals", {}), r.get("prev", {})
+            ch = f" (пред. период {f(p.get('net'))} ₸)" if p.get("net") else ""
+            lines.append(f"{title} {r['from']}…{r['to']}: выручка {f(t.get('net'))} ₸, заказов {f(t.get('orders'))}{ch}")
+        m = report("month", "all")
+        if m.get("by_location"):
+            lines.append("По точкам за 30 дней: " + "; ".join(f"{x['label']}: {f(x['net'])} ₸/{f(x['orders'])} зак." for x in m["by_location"]))
+        if m.get("series"):
+            lines.append("По дням (30 дн.): " + "; ".join(f"{x['label']}: {f(x['net'])}" for x in m["series"][-31:]))
+        if m.get("by_item"):
+            lines.append("Топ блюд по выручке (30 дн.): " + "; ".join(f"{x['label']}: {f(x['net'])}" for x in m["by_item"][:max_rows]))
+        if m.get("by_weekday"):
+            lines.append("По дням недели: " + "; ".join(f"{wd.get(x['id'], x['label']) if isinstance(x['id'], int) else x['label']}: {f(x['net'])}" for x in m["by_weekday"]))
+        if m.get("errors"):
+            lines.append("(часть отчётов недоступна: " + "; ".join(m["errors"])[:300] + ")")
+    except Exception as e:
+        lines.append(f"ошибка загрузки — {e}")
     return "\n".join(lines)

@@ -178,11 +178,80 @@ async def upload_menu(files: list[UploadFile] = File(...), mode: str = Form("rep
 
 # ---------- продажи Paloma365 ----------
 @app.get("/api/sales")
-def get_sales(days: int = 30):
+def get_sales(period: str = "week", loc: str = "all"):
     try:
-        return paloma.sales(days)
+        return paloma.report(period, loc)
     except Exception as e:
         raise HTTPException(502, str(e))
+
+
+@app.get("/api/locations")
+def get_locations():
+    try:
+        return {"connected": paloma.connected(), "locations": paloma.locations() if paloma.connected() else [], "points": memory.points()}
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+
+# ---------- склад ----------
+class StockIn(BaseModel):
+    name: str
+    category: str = ""
+    qty: float = 0
+    unit: str = "pcs"
+    min_qty: float | None = None
+    point: str = ""
+    price: float | None = None
+
+
+class MoveIn(BaseModel):
+    amount: float
+    unit: str = ""
+    note: str = ""
+
+
+class PointsIn(BaseModel):
+    points: list[str]
+
+
+@app.get("/api/stock")
+def stock_get(point: str = ""):
+    return {"items": memory.stock_list(point), "points": memory.points()}
+
+
+@app.post("/api/stock")
+def stock_post(body: StockIn):
+    if not body.name.strip():
+        raise HTTPException(400, "Введите название")
+    memory.stock_add(body.model_dump())
+    return {"items": memory.stock_list()}
+
+
+@app.put("/api/stock/{sid}")
+def stock_put(sid: int, body: StockIn):
+    memory.stock_update(sid, body.model_dump())
+    return {"items": memory.stock_list()}
+
+
+@app.post("/api/stock/{sid}/move")
+def stock_mv(sid: int, body: MoveIn):
+    try:
+        memory.stock_move(sid, body.amount, body.unit, body.note)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"items": memory.stock_list()}
+
+
+@app.delete("/api/stock/{sid}")
+def stock_del(sid: int):
+    memory.stock_delete(sid)
+    return {"items": memory.stock_list()}
+
+
+@app.post("/api/points")
+def points_set(body: PointsIn):
+    memory.set_points(body.points)
+    return {"points": memory.points()}
 
 
 @app.get("/api/sales/raw")

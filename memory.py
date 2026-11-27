@@ -65,6 +65,11 @@ def init_db():
         "text TEXT, author TEXT, created TEXT NOT NULL)"
     )
     _run("CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT)")
+    _run(
+        f"CREATE TABLE IF NOT EXISTS stock (id {pk}, name TEXT NOT NULL, category TEXT, qty REAL NOT NULL DEFAULT 0, "
+        "unit TEXT NOT NULL, min_qty REAL, point TEXT, price REAL, updated TEXT)"
+    )
+    _run(f"CREATE TABLE IF NOT EXISTS stock_log (id {pk}, stock_id INTEGER, delta REAL, unit TEXT, note TEXT, created TEXT)")
     if _run("SELECT COUNT(*) AS n FROM facts", fetch="one")["n"] == 0:
         _run(
             "INSERT INTO facts(text, created) VALUES (?, ?)",
@@ -143,6 +148,95 @@ def set_setting(k: str, v: str):
     _run("INSERT INTO settings(k, v) VALUES (?, ?)", (k, v))
 
 
+# ---------- точки ----------
+DEFAULT_POINTS = ["28а Food house", "13 Food house", "Озен Food house"]
+
+
+def points() -> list[str]:
+    try:
+        v = json.loads(get_setting("points", "") or "[]")
+        return v if isinstance(v, list) and v else DEFAULT_POINTS
+    except ValueError:
+        return DEFAULT_POINTS
+
+
+def set_points(names: list[str]):
+    set_setting("points", json.dumps([n.strip() for n in names if n.strip()], ensure_ascii=False))
+
+
+# ---------- склад ----------
+UNITS = {"g": ("g", 1), "kg": ("g", 1000), "ml": ("ml", 1), "l": ("ml", 1000), "pcs": ("pcs", 1)}
+
+
+def convert(amount: float, frm: str, to: str) -> float:
+    """Перевод между г↔кг и мл↔л; штуки не переводятся."""
+    if frm == to:
+        return amount
+    a, b = UNITS.get(frm), UNITS.get(to)
+    if not a or not b or a[0] != b[0]:
+        raise ValueError(f"Нельзя перевести {frm} в {to}")
+    return amount * a[1] / b[1]
+
+
+def stock_list(point: str = ""):
+    if point:
+        return _run("SELECT * FROM stock WHERE point = ? ORDER BY category, name", (point,), fetch="all")
+    return _run("SELECT * FROM stock ORDER BY point, category, name", fetch="all")
+
+
+def stock_add(d: dict):
+    unit = d.get("unit") if d.get("unit") in UNITS else "pcs"
+    _run(
+        "INSERT INTO stock(name, category, qty, unit, min_qty, point, price, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (d["name"].strip(), (d.get("category") or "").strip(), float(d.get("qty") or 0), unit,
+         d.get("min_qty"), d.get("point") or "", d.get("price"), _now()),
+    )
+
+
+def stock_update(sid: int, d: dict):
+    unit = d.get("unit") if d.get("unit") in UNITS else "pcs"
+    _run(
+        "UPDATE stock SET name = ?, category = ?, qty = ?, unit = ?, min_qty = ?, point = ?, price = ?, updated = ? WHERE id = ?",
+        (d["name"].strip(), (d.get("category") or "").strip(), float(d.get("qty") or 0), unit,
+         d.get("min_qty"), d.get("point") or "", d.get("price"), _now(), sid),
+    )
+
+
+def stock_move(sid: int, amount: float, unit: str, note: str = ""):
+    row = _run("SELECT * FROM stock WHERE id = ?", (sid,), fetch="one")
+    if not row:
+        raise ValueError("Позиция не найдена")
+    delta = convert(float(amount), unit or row["unit"], row["unit"])
+    new_qty = max(0.0, (row["qty"] or 0) + delta)
+    _run("UPDATE stock SET qty = ?, updated = ? WHERE id = ?", (new_qty, _now(), sid))
+    _run("INSERT INTO stock_log(stock_id, delta, unit, note, created) VALUES (?, ?, ?, ?, ?)", (sid, delta, row["unit"], note, _now()))
+
+
+def stock_delete(sid: int):
+    _run("DELETE FROM stock WHERE id = ?", (sid,))
+
+
+def _fmt_qty(q, unit):
+    q = q or 0
+    if unit == "g" and q >= 1000:
+        return f"{q / 1000:g} кг"
+    if unit == "ml" and q >= 1000:
+        return f"{q / 1000:g} л"
+    return f"{q:g} " + {"g": "г", "kg": "кг", "ml": "мл", "l": "л", "pcs": "шт"}.get(unit, unit)
+
+
+def stock_context() -> str:
+    rows = stock_list()
+    if not rows:
+        return ""
+    lines = ["\nСКЛАД (остатки):"]
+    for r in rows[:300]:
+        low = r["min_qty"] is not None and (r["qty"] or 0) <= r["min_qty"]
+        mn = f", минимум {_fmt_qty(r['min_qty'], r['unit'])}" if r["min_qty"] is not None else ""
+        lines.append(f"- [{r['point'] or 'без точки'}] {r['name']}: {_fmt_qty(r['qty'], r['unit'])}{mn}{' ⚠️ МАЛО' if low else ''}")
+    return "\n".join(lines)
+
+
 # ---------- WhatsApp ----------
 def wa_add(phone: str, direction: str, text: str, name: str = "", author: str = ""):
     _run(
@@ -175,7 +269,7 @@ def memory_context() -> str:
     """Текст с памятью заведения, который получает каждый агент."""
     facts = list_facts()
     menu = list_menu()
-    lines = ["ПАМЯТЬ ЗАВЕДЕНИЯ:"]
+    lines = ["ПАМЯТЬ ЗАВЕДЕНИЯ:", f"- Точки сети: {', '.join(points())}."]
     lines += [f"- {f['text']}" for f in facts] or ["- (пока пусто)"]
     lines.append("\nМЕНЮ:")
     if menu:
@@ -184,4 +278,4 @@ def memory_context() -> str:
             lines.append(f"- [{m['category']}] {m['name']} — {price}")
     else:
         lines.append("- меню ещё не загружено")
-    return "\n".join(lines)
+    return "\n".join(lines) + stock_context()
