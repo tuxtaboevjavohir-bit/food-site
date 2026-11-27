@@ -94,15 +94,25 @@ def demo_mode() -> bool:
     return _client() is None
 
 
-def _ask(system: str, user_content, max_tokens: int = 1500) -> str:
+def _ask(system: str, user_content, max_tokens: int = 4000) -> str:
     client = _client()
-    msg = client.messages.create(
-        model=MODEL,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user_content}],
-    )
-    return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
+    text, stop = "", ""
+    for _ in range(2):  # если ответ пустой — пробуем ещё раз
+        msg = client.messages.create(
+            model=MODEL,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user_content}],
+        )
+        text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
+        stop = getattr(msg, "stop_reason", "")
+        if text:
+            break
+    if not text:
+        return "⚠️ Агент не смог ответить. Попробуйте поставить задачу ещё раз."
+    if stop == "max_tokens":
+        text += "\n\n_…ответ получился слишком длинным и обрезан. Попросите продолжить или сузьте задачу._"
+    return text
 
 
 def _extract_json(text: str):
@@ -154,8 +164,11 @@ def run_task(task: str):
             time.sleep(1.5)
             answer = _demo_answer(aid, a["task"])
         else:
-            system = AGENTS[aid]["role"] + "\n\n" + ctx + "\n\nОтвечай по-русски, структурно и по делу."
-            answer = _ask(system, f"Задача от директора: {a['task']}\n\nИсходный запрос владельца: {task}")
+            system = (
+                AGENTS[aid]["role"] + "\n\n" + ctx + "\n\nОтвечай по-русски, структурно и по делу. "
+                "Используй Markdown: заголовки, списки, таблицы. Уложись примерно в 400–600 слов."
+            )
+            answer = _ask(system, f"Задача от директора: {a['task']}\n\nИсходный запрос владельца: {task}", 6000)
         results.append({"agent": aid, "task": a["task"], "answer": answer})
         yield {"type": "result", "agent": aid, "task": a["task"], "text": answer}
         yield {"type": "status", "agent": aid, "state": "idle", "text": "Готово"}
@@ -171,7 +184,7 @@ def run_task(task: str):
             AGENTS["director"]["role"] + "\n\n" + ctx,
             f"Задача владельца: «{task}»\n\nОтветы команды:\n{joined}\n\n"
             "Сделай короткий итог для владельца: 3–6 пунктов плана действий с ответственными.",
-            1000,
+            2500,
         )
     yield {"type": "summary", "agent": "director", "text": summary}
     yield {"type": "status", "agent": "director", "state": "idle", "text": "Жду новую задачу"}
