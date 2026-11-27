@@ -197,7 +197,7 @@
   <section id="staff" class="tab">
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
       <div class="seg big" id="staffSub">
-        <button data-s="att" class="on" data-i18n="s_att">🕘 Явка</button><button data-s="ops" data-i18n="s_ops">🍳 Кухня и доставка</button><button data-s="list" data-i18n="s_list">👥 Сотрудники</button>
+        <button data-s="att" class="on" data-i18n="s_att">🕘 Приход и уход</button><button data-s="ops" data-i18n="s_ops">🍳 Кухня и доставка</button><button data-s="list" data-i18n="s_list">👥 Сотрудники</button>
       </div>
       <div class="row" style="flex-wrap:wrap;gap:8px">
         <div class="seg" id="staffPeriod"><button data-p="today" class="on" data-i18n="p_today">Сегодня</button><button data-p="yesterday" data-i18n="p_yesterday">Вчера</button><button data-p="week" data-i18n="p_week">Неделя</button><button data-p="month" data-i18n="p_month">Месяц</button></div>
@@ -351,15 +351,15 @@ document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () =>
 // ---------- языки: русский / қазақша ----------
 const I18N = {
   ru: {
-    emp:"Сотрудник", emp_ph:"Имя сотрудника",
-    tab_staff:"Персонал", s_att:"🕘 Явка", s_ops:"🍳 Кухня и доставка", s_list:"👥 Сотрудники", p_link:"Страница для точки (отметка, кухня, курьер):",
+    emp:"Сотрудник", emp_ph:"Имя сотрудника", added:"Добавлен", saved:"Сохранено",
+    tab_staff:"Персонал", s_att:"🕘 Приход и уход", s_ops:"🍳 Кухня и доставка", s_list:"👥 Сотрудники", p_link:"Страница для точки (отметка, кухня, курьер):",
     p_link_hint:"Откройте её на планшете или телефоне на каждой точке. Сотрудник входит по своему PIN.", st_none:"Сотрудников пока нет — добавьте во вкладке «Сотрудники».",
     on_shift:"Сейчас на смене", since:"с", h:"ч", nobody:"Никто не отметился", att_sum:"Сводка по сотрудникам", att_log:"Журнал прихода и ухода", role:"Должность",
     hours:"Часов", lates:"Опоздания", missing:"Без отметки", came:"Пришёл", left:"Ушёл", late:"опоздание", min:"мин", no_out:"нет ухода", no_in:"нет прихода",
     prep_avg:"Время приготовления (сред.)", del_avg:"Время доставки (сред.)", max:"макс", over:"дольше", couriers:"Курьеры", deliveries:"Доставок", avg:"Среднее",
     prep_hours:"Приготовление по часам (красным — дольше нормы)", prep_col:"Готовка, мин", cook:"Повар", wait_col:"Ждал курьера", del_col:"Доставка, мин", courier_col:"Курьер",
     ops_empty:"Пока нет отметок. Повар нажимает «Готово», курьер — «Забрал» и «Доставил» на странице точки.", st_add_emp:"Добавить сотрудника", auto:"авто",
-    pin_hint:"PIN — 4 цифры для входа на странице точки. Оставьте пустым — программа придумает сама. Повар видит кухню, курьер — доставку.", pin_bad:"PIN — ровно 4 цифры",
+    pin_hint:"PIN — 4 цифры для входа на странице точки. Оставьте пустым — программа придумает сама. Повар видит кухню, курьер — доставку, кассир и оператор — отметку и заказы.", pin_bad:"PIN — ровно 4 цифры",
     tab_main:"Главная", sub_sales:"📊 Продажи", sub_orders:"🧾 Заказы", sub_items:"🍔 Товары", live:"⚡ Онлайн (каждые 30 сек)", updated:"обновлено",
     o_count:"Заказов", o_sum:"Сумма заказов", o_click:"нажмите на заказ — откроется состав", o_time:"Время", o_type:"Тип", o_status:"Статус", o_lines:"Поз.", o_total:"Сумма",
     i_total:"Всего товаров", i_sold:"продавались за период", i_sold_sum:"Продано на",
@@ -413,8 +413,8 @@ const I18N = {
     names:{}
   },
   kk: {
-    emp:"Қызметкер", emp_ph:"Қызметкердің аты",
-    tab_staff:"Қызметкерлер", s_att:"🕘 Келу", s_ops:"🍳 Асхана және жеткізу", s_list:"👥 Қызметкерлер", p_link:"Нүкте беті (белгі, асхана, курьер):",
+    emp:"Қызметкер", emp_ph:"Қызметкердің аты", added:"Қосылды", saved:"Сақталды",
+    tab_staff:"Қызметкерлер", s_att:"🕘 Келу-кету", s_ops:"🍳 Асхана және жеткізу", s_list:"👥 Қызметкерлер", p_link:"Нүкте беті (белгі, асхана, курьер):",
     p_link_hint:"Оны әр нүктедегі планшетте немесе телефонда ашыңыз. Қызметкер өз PIN-і арқылы кіреді.", st_none:"Әзірге қызметкер жоқ — «Қызметкерлер» бөлімінде қосыңыз.",
     on_shift:"Қазір ауысымда", since:"бастап", h:"сағ", nobody:"Ешкім белгі қоймады", att_sum:"Қызметкерлер бойынша қорытынды", att_log:"Келу-кету журналы", role:"Лауазымы",
     hours:"Сағат", lates:"Кешігулер", missing:"Белгісіз", came:"Келді", left:"Кетті", late:"кешігу", min:"мин", no_out:"кетуі жоқ", no_in:"келуі жоқ",
@@ -710,8 +710,8 @@ function renderItems(){
 
 // ---------- персонал ----------
 let staffSub = "att", staffPeriod = "today", STAFF = [];
-const ROLES = ["Кассир", "Повар", "Курьер", "Администратор", "Другое"];
-const ROLES_KK = {"Кассир":"Кассир", "Повар":"Аспаз", "Курьер":"Курьер", "Администратор":"Әкімші", "Другое":"Басқа"};
+const ROLES = ["Кассир", "Оператор", "Повар", "Курьер", "Администратор", "Другое"];
+const ROLES_KK = {"Кассир":"Кассир", "Оператор":"Оператор", "Повар":"Аспаз", "Курьер":"Курьер", "Администратор":"Әкімші", "Другое":"Басқа"};
 const roleName = r => LANG === "kk" ? (ROLES_KK[r] || r) : r;
 const shiftLbl = s => s === "night" ? "🌙 " + (LANG === "kk" ? "Түнгі 21:00" : "Ночная 21:00") : "☀️ " + (LANG === "kk" ? "Күндізгі 09:00" : "Дневная 09:00");
 $("#pLink").textContent = location.origin + "/p"; $("#pLink").href = "/p";
@@ -760,13 +760,14 @@ async function loadOps(){
 }
 let stEditId = null;
 function renderStaffList(points){
+  stEditId = null;
   const pOpt = sel => points.map(p => `<option ${p === sel ? "selected" : ""}>${esc(p)}</option>`).join("");
   $("#staffBox").innerHTML = `<div class="card"><h3 id="sfTitle">${t("st_add_emp")}</h3><div class="stform" style="grid-template-columns:2fr 1.2fr 1.4fr 1.3fr 1fr auto auto">
       <input type="text" id="sfName" placeholder="${t("emp_ph")}"><select id="sfRole">${ROLES.map(r => `<option value="${r}">${roleName(r)}</option>`).join("")}</select>
       <select id="sfPoint">${pOpt(points[0])}</select><select id="sfShift"><option value="day">${shiftLbl("day")}</option><option value="night">${shiftLbl("night")}</option></select>
       <input type="text" id="sfPin" maxlength="4" inputmode="numeric" placeholder="PIN (${t("auto")})">
       <button class="main" id="sfSave" style="padding:10px 16px">${t("st_btn_add")}</button><button class="copy" id="sfCancel" style="float:none;display:none">${t("st_cancel")}</button></div>
-      <small>${t("pin_hint")}</small></div>
+      <div id="sfMsg" style="margin:6px 0"></div><small>${t("pin_hint")}</small></div>
     <div class="card">${STAFF.filter(s => s.active).length ? `<div class="md"><table><tr><th>${t("emp")}</th><th>${t("role")}</th><th>${t("point")}</th><th>${t("shift")}</th><th>PIN</th><th></th></tr>
       ${STAFF.filter(s => s.active).map(s => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(roleName(s.role))}</td><td>${esc(s.point)}</td><td>${shiftLbl(s.shift)}</td><td><code>${esc(s.pin)}</code></td>
         <td class="st-act"><button data-e="${s.id}">✎</button><button data-d="${s.id}">🗑</button></td></tr>`).join("")}</table></div>` : `<small>${t("st_none")}</small>`}</div>`;
@@ -774,10 +775,16 @@ function renderStaffList(points){
   $("#sfCancel").onclick = reset;
   $("#sfSave").onclick = async () => {
     const body = {name:$("#sfName").value.trim(), role:$("#sfRole").value, point:$("#sfPoint").value, shift:$("#sfShift").value, pin:$("#sfPin").value.trim()};
-    if (!body.name) return $("#sfName").focus();
-    if (body.pin && !/^\d{4}$/.test(body.pin)) return alert(t("pin_bad"));
-    const r = await fetch(stEditId ? "/api/staff/" + stEditId : "/api/staff", {method: stEditId ? "PUT" : "POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
-    const d = await r.json(); if (!r.ok) return alert(d.detail); STAFF = d.staff; renderStaffList(points);
+    const msg = (txt, ok) => $("#sfMsg").innerHTML = `<span class="${ok ? "up" : "down"}">${esc(txt)}</span>`;
+    if (!body.name) { $("#sfName").focus(); return msg(t("emp_ph")); }
+    if (body.pin && !/^\d{4}$/.test(body.pin)) return msg(t("pin_bad"));
+    try {
+      const r = await fetch(stEditId ? "/api/staff/" + stEditId : "/api/staff", {method: stEditId ? "PUT" : "POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+      const d = await r.json().catch(() => ({})); if (!r.ok) return msg(d.detail || r.statusText);
+      const wasEdit = !!stEditId; STAFF = d.staff; renderStaffList(points);
+      const added = STAFF.find(x => x.name === body.name && x.active);
+      msg((wasEdit ? t("saved") : t("added")) + ": " + body.name + (added ? " · PIN " + added.pin : ""), true);
+    } catch (e) { msg(e.message); }
   };
   document.querySelectorAll("[data-e]").forEach(b => b.onclick = () => { const s = STAFF.find(x => x.id == b.dataset.e); stEditId = s.id;
     $("#sfName").value = s.name; $("#sfRole").value = s.role; $("#sfPoint").value = s.point; $("#sfShift").value = s.shift || "day"; $("#sfPin").value = s.pin;
