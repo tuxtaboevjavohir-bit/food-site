@@ -22,7 +22,7 @@ import whatsapp  # noqa: E402
 from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
-APP_VERSION = "2026-11-27.8"
+APP_VERSION = "2026-11-27.9"
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
@@ -42,7 +42,7 @@ button{margin-top:12px;width:100%;padding:12px;border:0;border-radius:10px;backg
 
 @app.middleware("http")
 async def auth(request: Request, call_next):
-    if not PASSWORD or request.url.path in ("/login", "/logo.png", "/favicon.png", "/favicon.ico", "/apple-touch-icon.png") or request.url.path.startswith("/webhook/"):
+    if not PASSWORD or request.url.path == "/p" or request.url.path.startswith("/p/api/") or request.url.path in ("/login", "/logo.png", "/favicon.png", "/favicon.ico", "/apple-touch-icon.png") or request.url.path.startswith("/webhook/"):
         return await call_next(request)
     if hmac.compare_digest(request.cookies.get("fh_auth", ""), TOKEN):
         return await call_next(request)
@@ -292,6 +292,144 @@ def stock_mv(sid: int, body: MoveIn):
 def stock_del(sid: int):
     memory.stock_delete(sid)
     return {"items": memory.stock_list()}
+
+
+# ---------- персонал ----------
+class StaffIn(BaseModel):
+    name: str
+    role: str = ""
+    point: str = ""
+    shift: str = "day"
+    pin: str = ""
+    phone: str = ""
+    active: bool = True
+
+
+@app.get("/api/staff")
+def staff_get():
+    return {"staff": memory.staff_list(), "points": memory.points()}
+
+
+@app.post("/api/staff")
+def staff_post(body: StaffIn):
+    if not body.name.strip():
+        raise HTTPException(400, "Введите имя")
+    try:
+        memory.staff_add(body.model_dump())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"staff": memory.staff_list()}
+
+
+@app.put("/api/staff/{sid}")
+def staff_put(sid: int, body: StaffIn):
+    try:
+        memory.staff_update(sid, body.model_dump())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"staff": memory.staff_list()}
+
+
+@app.delete("/api/staff/{sid}")
+def staff_del(sid: int):
+    memory.staff_delete(sid)
+    return {"staff": memory.staff_list()}
+
+
+def _period_dates(period: str):
+    from datetime import timedelta
+    t = memory.local_now().date()
+    days, back = {"today": (1, 0), "yesterday": (1, 1), "week": (7, 0), "month": (30, 0)}.get(period, (7, 0))
+    end = t - timedelta(days=back)
+    return (end - timedelta(days=days - 1)).isoformat(), end.isoformat()
+
+
+@app.get("/api/attendance")
+def attendance_get(period: str = "today", point: str = ""):
+    f, t = _period_dates(period)
+    return memory.attendance_report(f, t, point)
+
+
+@app.get("/api/ops")
+def ops_get(period: str = "today", point: str = ""):
+    f, t = _period_dates(period)
+    return memory.ops_report(f, t, point)
+
+
+# ---------- страницы точки: отметка, кухня, курьер (вход по PIN, без пароля владельца) ----------
+class CheckIn(BaseModel):
+    pin: str
+    kind: str = "auto"
+    lat: float | None = None
+    lng: float | None = None
+
+
+class MarkIn(BaseModel):
+    pin: str = ""
+    point: str = ""
+    order_key: str
+    kind: str
+    number: str | None = None
+    created: str | None = None
+    total: float | None = None
+
+
+@app.get("/p")
+def point_page():
+    return FileResponse(BASE / "point.html")
+
+
+@app.post("/p/api/checkin")
+def p_checkin(body: CheckIn):
+    try:
+        return memory.checkin(body.pin, body.kind, body.lat, body.lng)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/p/api/login")
+def p_login(body: CheckIn):
+    st = memory.staff_by_pin(body.pin)
+    if not st:
+        raise HTTPException(400, "Неверный PIN")
+    return {"name": st["name"], "role": st["role"], "point": st["point"], "points": memory.points()}
+
+
+def _point_loc(point: str) -> str:
+    acc = next((a for a in paloma.accounts() if a["name"] == point), None)
+    return f"{acc['idx']}:" if acc else "all"
+
+
+@app.get("/p/api/orders")
+def p_orders(pin: str, point: str = "", mode: str = "kitchen"):
+    st = memory.staff_by_pin(pin)
+    if not st:
+        raise HTTPException(401, "Неверный PIN")
+    point = point or st["point"]
+    data = paloma.orders("today", _point_loc(point), 120) if paloma.connected() else {"orders": []}
+    orders = data.get("orders", [])
+    if mode == "courier":
+        orders = [o for o in orders if str(o.get("type") or "").lower() in ("delivery", "доставка")] or orders
+    keys = [f"{o['acc']}:{o['id']}" for o in orders]
+    marks = memory.order_marks(keys)
+    for o in orders:
+        o["key"] = f"{o['acc']}:{o['id']}"
+        o["marks"] = marks.get(o["key"], {})
+    return {"point": point, "orders": orders, "errors": data.get("errors", [])}
+
+
+@app.post("/p/api/mark")
+def p_mark(body: MarkIn):
+    st = memory.staff_by_pin(body.pin)
+    if not st:
+        raise HTTPException(401, "Неверный PIN")
+    if body.kind not in ("ready", "picked", "delivered"):
+        raise HTTPException(400, "kind")
+    try:
+        memory.order_event(body.order_key, body.kind, body.point or st["point"], body.number, st["id"], body.created, body.total)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
 
 
 @app.post("/api/points")

@@ -69,6 +69,15 @@ def init_db():
         f"CREATE TABLE IF NOT EXISTS stock (id {pk}, name TEXT NOT NULL, category TEXT, qty REAL NOT NULL DEFAULT 0, "
         "unit TEXT NOT NULL, min_qty REAL, point TEXT, price REAL, updated TEXT)"
     )
+    _run(
+        f"CREATE TABLE IF NOT EXISTS staff (id {pk}, name TEXT NOT NULL, role TEXT, point TEXT, shift TEXT, pin TEXT NOT NULL, "
+        "phone TEXT, active INTEGER NOT NULL DEFAULT 1, created TEXT)"
+    )
+    _run(
+        f"CREATE TABLE IF NOT EXISTS order_events (id {pk}, order_key TEXT NOT NULL, point TEXT, number TEXT, kind TEXT NOT NULL, "
+        "staff_id INTEGER, ts TEXT NOT NULL, order_created TEXT, total REAL)"
+    )
+    _run(f"CREATE TABLE IF NOT EXISTS attendance (id {pk}, staff_id INTEGER NOT NULL, point TEXT, kind TEXT NOT NULL, ts TEXT NOT NULL, lat REAL, lng REAL)")
     _run(f"CREATE TABLE IF NOT EXISTS stock_log (id {pk}, stock_id INTEGER, delta REAL, unit TEXT, note TEXT, created TEXT)")
     if _run("SELECT COUNT(*) AS n FROM facts", fetch="one")["n"] == 0:
         _run(
@@ -237,6 +246,262 @@ def stock_context() -> str:
     return "\n".join(lines)
 
 
+# ---------- персонал ----------
+SHIFT_START = {"day": 9, "night": 21}
+LATE_MIN = 10
+
+
+def local_now():
+    try:
+        from zoneinfo import ZoneInfo
+        import os as _os
+        return datetime.now(ZoneInfo(_os.getenv("APP_TZ", "Asia/Almaty"))).replace(tzinfo=None)
+    except Exception:
+        from datetime import timedelta as _td
+        return datetime.utcnow() + _td(hours=5)
+
+
+def staff_list(active_only: bool = False):
+    q = "SELECT * FROM staff" + (" WHERE active = 1" if active_only else "") + " ORDER BY point, name"
+    return _run(q, fetch="all")
+
+
+def _new_pin():
+    import random
+    used = {r["pin"] for r in _run("SELECT pin FROM staff", fetch="all")}
+    while True:
+        pin = f"{random.randint(1000, 9999)}"
+        if pin not in used:
+            return pin
+
+
+def staff_add(d: dict):
+    pin = (d.get("pin") or "").strip() or _new_pin()
+    if _run("SELECT id FROM staff WHERE pin = ?", (pin,), fetch="one"):
+        raise ValueError("Такой PIN уже занят")
+    _run("INSERT INTO staff(name, role, point, shift, pin, phone, active, created) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
+         (d["name"].strip(), d.get("role") or "", d.get("point") or "", d.get("shift") or "day", pin, d.get("phone") or "", _now()))
+
+
+def staff_update(sid: int, d: dict):
+    pin = (d.get("pin") or "").strip()
+    if pin and _run("SELECT id FROM staff WHERE pin = ? AND id <> ?", (pin, sid), fetch="one"):
+        raise ValueError("Такой PIN уже занят")
+    cur = _run("SELECT * FROM staff WHERE id = ?", (sid,), fetch="one")
+    if not cur:
+        raise ValueError("Сотрудник не найден")
+    _run("UPDATE staff SET name = ?, role = ?, point = ?, shift = ?, pin = ?, phone = ?, active = ? WHERE id = ?",
+         (d.get("name", cur["name"]).strip(), d.get("role", cur["role"]), d.get("point", cur["point"]), d.get("shift", cur["shift"]),
+          pin or cur["pin"], d.get("phone", cur["phone"]), 1 if d.get("active", cur["active"]) else 0, sid))
+
+
+def staff_delete(sid: int):
+    _run("UPDATE staff SET active = 0 WHERE id = ?", (sid,))
+
+
+def checkin(pin: str, kind: str, lat=None, lng=None) -> dict:
+    st = _run("SELECT * FROM staff WHERE pin = ? AND active = 1", (pin.strip(),), fetch="one")
+    if not st:
+        raise ValueError("Неверный PIN")
+    last = _run("SELECT * FROM attendance WHERE staff_id = ? ORDER BY id DESC LIMIT 1", (st["id"],), fetch="one")
+    now = local_now()
+    if kind == "auto":
+        kind = "out" if last and last["kind"] == "in" else "in"
+    if last and last["kind"] == kind and (now - datetime.fromisoformat(last["ts"])).total_seconds() < 120:
+        raise ValueError("Уже отмечено — подождите пару минут")
+    ts = now.isoformat(timespec="seconds")
+    _run("INSERT INTO attendance(staff_id, point, kind, ts, lat, lng) VALUES (?, ?, ?, ?, ?, ?)", (st["id"], st["point"], kind, ts, lat, lng))
+    late = None
+    if kind == "in":
+        late = _late_minutes(st, now)
+    return {"name": st["name"], "point": st["point"], "kind": kind, "ts": ts, "late": late}
+
+
+def _late_minutes(st, t: datetime):
+    start_h = SHIFT_START.get(st["shift"] or "day")
+    if start_h is None:
+        return None
+    from datetime import timedelta as _td
+    base = t.replace(hour=start_h, minute=0, second=0, microsecond=0)
+    # ночная смена: приход до полудня считаем к вчерашнему 21:00 — это не опоздание
+    if start_h >= 12 and t.hour < 12:
+        base -= _td(days=1)
+    diff = (t - base).total_seconds() / 60
+    return int(diff) if LATE_MIN < diff < 4 * 60 else 0
+
+
+def attendance_report(date_from: str, date_to: str, point: str = "") -> dict:
+    """Пары приход→уход, часы, опоздания, сводка по сотрудникам, кто сейчас на смене."""
+    from datetime import timedelta as _td
+    staff = {s["id"]: s for s in staff_list()}
+    d_from = datetime.fromisoformat(date_from)
+    d_to = datetime.fromisoformat(date_to) + _td(days=1, hours=12)
+    rows = _run("SELECT * FROM attendance WHERE ts >= ? AND ts < ? ORDER BY staff_id, ts",
+                ((d_from - _td(hours=14)).isoformat(), d_to.isoformat()), fetch="all")
+    now = local_now()
+    visits, by_staff = [], {}
+    for r in rows:
+        by_staff.setdefault(r["staff_id"], []).append(r)
+    for sid, evs in by_staff.items():
+        st = staff.get(sid)
+        if not st or (point and (st["point"] or "") != point):
+            continue
+        i = 0
+        while i < len(evs):
+            e = evs[i]
+            if e["kind"] == "in":
+                tin = datetime.fromisoformat(e["ts"])
+                out = evs[i + 1] if i + 1 < len(evs) and evs[i + 1]["kind"] == "out" else None
+                tout = datetime.fromisoformat(out["ts"]) if out else None
+                i += 2 if out else 1
+                if tin.date() < d_from.date() or tin.date() > datetime.fromisoformat(date_to).date():
+                    continue
+                open_ = tout is None
+                hours = ((tout or now) - tin).total_seconds() / 3600
+                if open_ and hours > 16:  # забыли отметить уход
+                    hours, open_ = None, False
+                visits.append({"staff_id": sid, "name": st["name"], "role": st["role"], "point": st["point"], "shift": st["shift"],
+                               "date": tin.date().isoformat(), "in": tin.isoformat(timespec="minutes"),
+                               "out": tout.isoformat(timespec="minutes") if tout else None,
+                               "hours": round(hours, 2) if hours is not None else None, "late": _late_minutes(st, tin),
+                               "open": open_, "no_out": tout is None and not open_})
+            else:
+                tout = datetime.fromisoformat(e["ts"])
+                i += 1
+                if d_from.date() <= tout.date() <= datetime.fromisoformat(date_to).date():
+                    visits.append({"staff_id": sid, "name": st["name"], "role": st["role"], "point": st["point"], "shift": st["shift"],
+                                   "date": tout.date().isoformat(), "in": None, "out": tout.isoformat(timespec="minutes"),
+                                   "hours": None, "late": None, "open": False, "no_in": True})
+    visits.sort(key=lambda v: (v["in"] or v["out"] or ""), reverse=True)
+    summary = {}
+    for v in visits:
+        s = summary.setdefault(v["staff_id"], {"staff_id": v["staff_id"], "name": v["name"], "role": v["role"], "point": v["point"],
+                                               "days": 0, "hours": 0.0, "lates": 0, "late_min": 0, "missing": 0})
+        if v["in"]:
+            s["days"] += 1
+        s["hours"] += v["hours"] or 0
+        if v["late"]:
+            s["lates"] += 1
+            s["late_min"] += v["late"]
+        if v.get("no_out") or v.get("no_in"):
+            s["missing"] += 1
+    on_shift = [v for v in visits if v["open"]]
+    return {"visits": visits, "summary": sorted(summary.values(), key=lambda x: -x["hours"]), "on_shift": on_shift,
+            "now": now.isoformat(timespec="minutes"), "late_limit": LATE_MIN}
+
+
+# ---------- кухня и доставка ----------
+def order_event(order_key: str, kind: str, point: str = "", number=None, staff_id=None, order_created=None, total=None):
+    if _run("SELECT id FROM order_events WHERE order_key = ? AND kind = ?", (order_key, kind), fetch="one"):
+        raise ValueError("Уже отмечено")
+    _run("INSERT INTO order_events(order_key, point, number, kind, staff_id, ts, order_created, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+         (order_key, point, str(number or ""), kind, staff_id, local_now().isoformat(timespec="seconds"), order_created, total))
+
+
+def order_marks(keys: list[str]) -> dict:
+    """{order_key: {kind: {ts, staff_id}}} для списка заказов."""
+    out = {}
+    for i in range(0, len(keys), 200):
+        chunk = keys[i:i + 200]
+        if not chunk:
+            continue
+        q = "SELECT * FROM order_events WHERE order_key IN (" + ",".join("?" * len(chunk)) + ")"
+        for r in _run(q, tuple(chunk), fetch="all"):
+            out.setdefault(r["order_key"], {})[r["kind"]] = {"ts": r["ts"], "staff_id": r["staff_id"]}
+    return out
+
+
+def staff_by_pin(pin: str):
+    return _run("SELECT * FROM staff WHERE pin = ? AND active = 1", ((pin or "").strip(),), fetch="one")
+
+
+def _mins(a, b):
+    try:
+        return round((datetime.fromisoformat(b[:19]) - datetime.fromisoformat(a[:19])).total_seconds() / 60, 1)
+    except Exception:
+        return None
+
+
+PREP_NORM, DELIVERY_NORM = 15, 40
+
+
+def ops_report(date_from: str, date_to: str, point: str = "") -> dict:
+    """Время приготовления и доставки по отметкам кухни и курьеров."""
+    from datetime import timedelta as _td
+    rows = _run("SELECT * FROM order_events WHERE ts >= ? AND ts < ? ORDER BY ts", (date_from, (datetime.fromisoformat(date_to) + _td(days=1, hours=12)).isoformat()), fetch="all")
+    staff = {s["id"]: s for s in staff_list()}
+    orders = {}
+    for r in rows:
+        if point and (r["point"] or "") != point:
+            continue
+        o = orders.setdefault(r["order_key"], {"key": r["order_key"], "point": r["point"], "number": r["number"], "created": r["order_created"], "total": r["total"]})
+        o[r["kind"]] = r["ts"]
+        if r["staff_id"]:
+            o[r["kind"] + "_by"] = staff.get(r["staff_id"], {}).get("name")
+        o["created"] = o["created"] or r["order_created"]
+    out = []
+    for o in orders.values():
+        o["prep"] = _mins(o["created"], o["ready"]) if o.get("created") and o.get("ready") else None
+        o["wait"] = _mins(o["ready"], o["picked"]) if o.get("ready") and o.get("picked") else None
+        o["delivery"] = _mins(o["picked"], o["delivered"]) if o.get("picked") and o.get("delivered") else None
+        o["total_time"] = _mins(o["created"], o["delivered"]) if o.get("created") and o.get("delivered") else None
+        out.append(o)
+    out.sort(key=lambda o: o.get("created") or o.get("ready") or o.get("picked") or "", reverse=True)
+    avg = lambda xs: round(sum(xs) / len(xs), 1) if xs else None
+    preps = [o["prep"] for o in out if o["prep"] is not None and 0 <= o["prep"] < 240]
+    dels = [o["delivery"] for o in out if o["delivery"] is not None and 0 <= o["delivery"] < 300]
+    couriers = {}
+    for o in out:
+        if o.get("delivered_by") or o.get("picked_by"):
+            name = o.get("delivered_by") or o.get("picked_by")
+            c = couriers.setdefault(name, {"name": name, "count": 0, "times": [], "late": 0})
+            c["count"] += 1
+            if o["delivery"] is not None:
+                c["times"].append(o["delivery"])
+                if o["delivery"] > DELIVERY_NORM:
+                    c["late"] += 1
+    cour = [{"name": c["name"], "count": c["count"], "avg": avg(c["times"]), "max": max(c["times"]) if c["times"] else None, "late": c["late"]} for c in couriers.values()]
+    cour.sort(key=lambda c: (c["avg"] is None, c["avg"] or 0))
+    hours = {}
+    for o in out:
+        if o["prep"] is not None and o.get("created"):
+            hours.setdefault(o["created"][11:13], []).append(o["prep"])
+    return {"orders": out[:300], "prep_avg": avg(preps), "prep_max": max(preps) if preps else None, "prep_slow": sum(1 for p in preps if p > PREP_NORM),
+            "delivery_avg": avg(dels), "delivery_max": max(dels) if dels else None, "delivery_late": sum(1 for d in dels if d > DELIVERY_NORM),
+            "couriers": cour, "prep_by_hour": [{"hour": h, "avg": avg(v), "count": len(v)} for h, v in sorted(hours.items())],
+            "norms": {"prep": PREP_NORM, "delivery": DELIVERY_NORM}}
+
+
+def ops_context() -> str:
+    from datetime import timedelta as _td
+    t = local_now().date()
+    r = ops_report((t - _td(days=6)).isoformat(), t.isoformat())
+    if not r["orders"]:
+        return ""
+    lines = [f"\nКУХНЯ И ДОСТАВКА (7 дней, по отметкам): приготовление в среднем {r['prep_avg']} мин (дольше {PREP_NORM} мин: {r['prep_slow']}), "
+             f"доставка в среднем {r['delivery_avg']} мин (дольше {DELIVERY_NORM} мин: {r['delivery_late']})."]
+    if r["couriers"]:
+        lines.append("Курьеры: " + "; ".join(f"{c['name']}: {c['count']} доставок, ср. {c['avg']} мин, опозданий {c['late']}" for c in r["couriers"]))
+    if r["prep_by_hour"]:
+        lines.append("Время приготовления по часам: " + "; ".join(f"{h['hour']}:00 — {h['avg']} мин" for h in r["prep_by_hour"]))
+    return "\n".join(lines)
+
+
+def attendance_context() -> str:
+    from datetime import timedelta as _td
+    if not _run("SELECT id FROM staff LIMIT 1", fetch="one"):
+        return ""
+    t = local_now().date()
+    rep = attendance_report((t - _td(days=6)).isoformat(), t.isoformat())
+    lines = ["\nПЕРСОНАЛ (учёт прихода/ухода за 7 дней; смены: дневная с 09:00, ночная с 21:00, опоздание — больше 10 мин):"]
+    for s in rep["summary"]:
+        lines.append(f"- {s['name']} ({s['role'] or 'сотрудник'}, {s['point'] or 'без точки'}): {s['days']} смен, {s['hours']:.1f} ч, "
+                     f"опозданий {s['lates']} (всего {s['late_min']} мин), без отметки ухода/прихода {s['missing']}")
+    if rep["on_shift"]:
+        lines.append("Сейчас на смене: " + ", ".join(f"{v['name']} ({v['point']}, с {v['in'][11:]})" for v in rep["on_shift"]))
+    return "\n".join(lines)
+
+
 # ---------- WhatsApp ----------
 def wa_add(phone: str, direction: str, text: str, name: str = "", author: str = ""):
     _run(
@@ -278,4 +543,4 @@ def memory_context() -> str:
             lines.append(f"- [{m['category']}] {m['name']} — {price}")
     else:
         lines.append("- меню ещё не загружено")
-    return "\n".join(lines) + stock_context()
+    return "\n".join(lines) + stock_context() + attendance_context() + ops_context()

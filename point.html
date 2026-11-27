@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Food house — точка</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#03060d">
+<style>
+  :root{--bg:#03060d;--panel:rgba(12,22,40,.8);--line:#1b2b48;--txt:#e6f1ff;--mute:#7f93b3;--acc:#22d3ee;--acc2:#a855f7}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:system-ui,-apple-system,sans-serif;color:var(--txt);min-height:100vh;
+    background:radial-gradient(800px 400px at 0 0,#0b3a5c66,transparent 60%),radial-gradient(700px 400px at 100% 100%,#4c1d9566,transparent 60%),var(--bg)}
+  header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  header img{width:36px;height:36px;border-radius:50%}
+  header b{font-size:17px}header span{color:var(--mute);font-size:13px}
+  .lang{margin-left:auto;display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .lang button{background:none;border:0;color:var(--mute);padding:6px 10px;font-weight:600}
+  .lang button.on{background:#a5f3fc;color:#020617}
+  main{max-width:720px;margin:0 auto;padding:16px}
+  .pin{display:flex;flex-direction:column;align-items:center;gap:16px;margin-top:20px}
+  .dots{display:flex;gap:14px}.dots i{width:16px;height:16px;border-radius:50%;border:2px solid var(--acc)}.dots i.f{background:var(--acc)}
+  .pad{display:grid;grid-template-columns:repeat(3,84px);gap:12px}
+  .pad button{height:72px;border-radius:18px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:26px;font-weight:600}
+  .pad button:active{background:#0e3a5c}
+  .big{width:100%;padding:22px;border-radius:18px;border:0;font-size:22px;font-weight:800;color:#020617;background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 0 24px #22d3ee44}
+  .big.out{background:linear-gradient(135deg,#f472b6,#f97316)}
+  .msg{padding:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line);text-align:center;font-size:17px}
+  .msg.ok{border-color:#34d399}.msg.err{border-color:#f87171;color:#fca5a5}
+  .tabs{display:flex;gap:6px;margin:14px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .tabs button{flex:1;padding:12px;background:none;border:0;color:var(--mute);font-weight:700;font-size:15px}
+  .tabs button.on{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#020617}
+  .ord{display:flex;align-items:center;gap:10px;padding:12px;border-radius:14px;background:var(--panel);border:1px solid var(--line);margin-bottom:10px}
+  .ord .n{font-size:22px;font-weight:800;min-width:70px}
+  .ord .i{flex:1;font-size:13px;color:var(--mute)}.ord .i b{color:var(--txt);font-size:15px}
+  .ord button{padding:14px 16px;border-radius:12px;border:0;font-weight:800;font-size:15px;color:#020617;background:linear-gradient(135deg,var(--acc),var(--acc2))}
+  .ord.done{opacity:.55}.ord.warn{border-color:#f87171}
+  .t{font-variant-numeric:tabular-nums;font-weight:700}.red{color:#f87171}.green{color:#34d399}
+  small{color:var(--mute)}
+  a{color:#67e8f9}
+</style>
+</head>
+<body>
+<header><img src="/logo.png" alt=""><div><b>Food house</b><br><span id="who">—</span></div>
+  <div class="lang"><button data-l="ru">РУС</button><button data-l="kk">ҚАЗ</button></div></header>
+<main id="app"></main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const T = {
+  ru:{enter:"Введите свой PIN", wrong:"Неверный PIN", came:"✅ Пришёл", left:"🏁 Ушёл", hello:"Здравствуйте", attend:"Отметка", kitchen:"🍳 Кухня", courier:"🛵 Доставка",
+      inok:"Приход отмечен", outok:"Уход отмечен", late:"Опоздание", min:"мин", ready:"Готово", picked:"Забрал", delivered:"Доставил", logout:"Выйти",
+      none:"Заказов пока нет", ago:"назад", prep:"готовился", deliv:"в пути", waitp:"ждёт с", noPal:"Заказы появятся, когда подключена Paloma", hint:"Отмечайтесь при приходе и уходе со смены"},
+  kk:{enter:"PIN-кодыңызды енгізіңіз", wrong:"PIN қате", came:"✅ Келдім", left:"🏁 Кеттім", hello:"Сәлеметсіз бе", attend:"Белгі", kitchen:"🍳 Асхана", courier:"🛵 Жеткізу",
+      inok:"Келу белгіленді", outok:"Кету белгіленді", late:"Кешігу", min:"мин", ready:"Дайын", picked:"Алдым", delivered:"Жеткіздім", logout:"Шығу",
+      none:"Әзірге тапсырыс жоқ", ago:"бұрын", prep:"дайындалды", deliv:"жолда", waitp:"күтуде", noPal:"Тапсырыстар Paloma қосылғанда шығады", hint:"Ауысымға келгенде және кеткенде белгі қойыңыз"}};
+let L = "ru"; try { L = localStorage.getItem("fh_lang") === "kk" ? "kk" : "ru"; } catch {}
+const t = k => T[L][k] || T.ru[k];
+let PIN = "", ME = null, TAB = "attend", timer = null;
+try { PIN = localStorage.getItem("fh_pin") || ""; } catch {}
+
+document.querySelectorAll("[data-l]").forEach(b => b.onclick = () => { L = b.dataset.l; try { localStorage.setItem("fh_lang", L); } catch {} render(); });
+async function api(url, body){
+  const r = await fetch(url, body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : {});
+  const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.detail || r.statusText); return d;
+}
+function render(){
+  document.querySelectorAll("[data-l]").forEach(b => b.classList.toggle("on", b.dataset.l === L));
+  ME ? renderMain() : renderPin();
+}
+// ---------- PIN ----------
+let entered = "";
+function renderPin(msg){
+  $("#who").textContent = "";
+  $("#app").innerHTML = `<div class="pin"><h2 style="margin:0">${t("enter")}</h2><div class="dots">${[0,1,2,3].map(i => `<i class="${i < entered.length ? "f" : ""}"></i>`).join("")}</div>
+    ${msg ? `<div class="msg err">${esc(msg)}</div>` : ""}
+    <div class="pad">${[1,2,3,4,5,6,7,8,9,"⌫",0,"✓"].map(k => `<button data-k="${k}">${k}</button>`).join("")}</div><small>${t("hint")}</small></div>`;
+  document.querySelectorAll(".pad button").forEach(b => b.onclick = () => pinKey(b.dataset.k));
+}
+async function pinKey(k){
+  if (k === "⌫") entered = entered.slice(0, -1);
+  else if (k === "✓" || entered.length >= 3) { if (k !== "✓") entered += k; return login(entered); }
+  else entered += k;
+  renderPin();
+}
+async function login(pin){
+  try { ME = await api("/p/api/login", {pin}); PIN = pin; try { localStorage.setItem("fh_pin", pin); } catch {}
+    TAB = /повар|cook|аспаз/i.test(ME.role) ? "kitchen" : /курьер|courier/i.test(ME.role) ? "courier" : "attend"; entered = ""; render(); }
+  catch (e) { entered = ""; ME = null; renderPin(t("wrong")); }
+}
+// ---------- основной экран ----------
+function renderMain(note){
+  $("#who").textContent = `${ME.name} · ${ME.point || ""}`;
+  $("#app").innerHTML = `<div class="tabs">${["attend", "kitchen", "courier"].map(x => `<button data-t="${x}" class="${x === TAB ? "on" : ""}">${t(x)}</button>`).join("")}</div>
+    <div id="body"></div><p style="text-align:center"><a href="#" id="lo">${t("logout")}</a></p>`;
+  document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { TAB = b.dataset.t; renderMain(); });
+  $("#lo").onclick = e => { e.preventDefault(); ME = null; PIN = ""; try { localStorage.removeItem("fh_pin"); } catch {} clearTimeout(timer); render(); };
+  clearTimeout(timer);
+  if (TAB === "attend") renderAttend(note); else loadOrders();
+}
+function renderAttend(note){
+  $("#body").innerHTML = `<h2>${t("hello")}, ${esc(ME.name)}!</h2><div style="display:grid;gap:12px">
+    <button class="big" id="cin">${t("came")}</button><button class="big out" id="cout">${t("left")}</button></div><div id="res" style="margin-top:14px">${note || ""}</div>`;
+  $("#cin").onclick = () => mark("in"); $("#cout").onclick = () => mark("out");
+}
+function geo(){ return new Promise(res => { if (!navigator.geolocation) return res({}); let done = false;
+  navigator.geolocation.getCurrentPosition(p => { done = true; res({lat:p.coords.latitude, lng:p.coords.longitude}); }, () => { done = true; res({}); }, {timeout:4000});
+  setTimeout(() => !done && res({}), 4500); }); }
+async function mark(kind){
+  const g = await geo();
+  try { const r = await api("/p/api/checkin", {pin:PIN, kind, ...g}); const tm = r.ts.slice(11, 16);
+    renderAttend(`<div class="msg ok">${kind === "in" ? t("inok") : t("outok")}: <b>${tm}</b>${r.late ? `<br><span class="red">${t("late")}: ${r.late} ${t("min")}</span>` : ""}</div>`); }
+  catch (e) { renderAttend(`<div class="msg err">${esc(e.message)}</div>`); }
+}
+// ---------- кухня / курьер ----------
+const minsSince = iso => iso ? Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)) : null;
+const diff = (a, b) => (a && b) ? Math.round((Date.parse(b.replace(" ", "T")) - Date.parse(a.replace(" ", "T"))) / 60000) : null;
+async function loadOrders(){
+  let d; try { d = await api(`/p/api/orders?pin=${encodeURIComponent(PIN)}&point=${encodeURIComponent(ME.point || "")}&mode=${TAB}`); }
+  catch (e) { $("#body").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
+  const os = d.orders || [];
+  if (!os.length) { $("#body").innerHTML = `<div class="msg">${t("none")}${d.errors?.length ? "<br><small>" + esc(d.errors.join("; ")) + "</small>" : ""}</div>`; }
+  else if (TAB === "kitchen") {
+    const todo = os.filter(o => !o.marks.ready), done = os.filter(o => o.marks.ready).slice(0, 15);
+    $("#body").innerHTML = todo.map(o => { const m = minsSince(o.created);
+      return `<div class="ord ${m > 15 ? "warn" : ""}"><div class="n">№${esc(o.number ?? "")}</div><div class="i"><b>${esc((o.created || "").slice(11, 16))}</b> · ${o.lines ?? ""} поз. · ${Math.round(o.total || 0)} ₸<br>
+        <span class="t ${m > 15 ? "red" : ""}">${m} ${t("min")} ${t("ago")}</span></div><button data-k="${esc(o.key)}" data-a="ready">${t("ready")}</button></div>`; }).join("")
+      + done.map(o => `<div class="ord done"><div class="n">№${esc(o.number ?? "")}</div><div class="i">${t("prep")} <span class="t">${diff(o.created?.slice(0, 19), o.marks.ready.ts) ?? "—"} ${t("min")}</span></div><span class="green">✓</span></div>`).join("");
+  } else {
+    const active = os.filter(o => !o.marks.delivered), done = os.filter(o => o.marks.delivered).slice(0, 15);
+    $("#body").innerHTML = active.map(o => { const picked = o.marks.picked; const m = picked ? minsSince(picked.ts) : minsSince(o.created);
+      return `<div class="ord ${picked && m > 40 ? "warn" : ""}"><div class="n">№${esc(o.number ?? "")}</div><div class="i"><b>${Math.round(o.total || 0)} ₸</b> · ${esc((o.created || "").slice(11, 16))}${o.customer ? " · " + esc(o.customer) : ""}<br>
+        ${picked ? `${t("deliv")} <span class="t">${m} ${t("min")}</span>` : `${t("waitp")} ${esc((o.created || "").slice(11, 16))}`}</div>
+        <button data-k="${esc(o.key)}" data-a="${picked ? "delivered" : "picked"}">${picked ? t("delivered") : t("picked")}</button></div>`; }).join("")
+      + done.map(o => `<div class="ord done"><div class="n">№${esc(o.number ?? "")}</div><div class="i">${t("deliv")} <span class="t">${diff(o.marks.picked?.ts, o.marks.delivered.ts) ?? "—"} ${t("min")}</span></div><span class="green">✓</span></div>`).join("");
+  }
+  document.querySelectorAll(".ord button").forEach(b => b.onclick = async () => {
+    const o = os.find(x => x.key === b.dataset.k); b.disabled = true;
+    try { await api("/p/api/mark", {pin:PIN, point:ME.point, order_key:o.key, kind:b.dataset.a, number:String(o.number ?? ""), created:o.created, total:o.total}); }
+    catch (e) { alert(e.message); }
+    loadOrders();
+  });
+  clearTimeout(timer); timer = setTimeout(() => ME && TAB !== "attend" && loadOrders(), 20000);
+}
+// автологин
+(async () => { if (PIN) { try { ME = await api("/p/api/login", {pin:PIN}); TAB = /повар|cook|аспаз/i.test(ME.role) ? "kitchen" : /курьер|courier/i.test(ME.role) ? "courier" : "attend"; } catch { PIN = ""; } } render(); })();
+</script>
+</body>
+</html>

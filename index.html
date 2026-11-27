@@ -151,6 +151,7 @@
     <button data-tab="hq" class="on" data-i18n="tab_hq">Штаб</button>
     <button data-tab="sales" data-i18n="tab_main">Главная</button>
     <button data-tab="stock" data-i18n="tab_stock">Склад</button>
+    <button data-tab="staff" data-i18n="tab_staff">Персонал</button>
     <button data-tab="wa">WhatsApp</button>
     <button data-tab="menu" data-i18n="tab_menu">Меню</button>
     <button data-tab="mem" data-i18n="tab_mem">Память</button>
@@ -190,6 +191,26 @@
     <div id="salesBox"></div>
     <div id="ordersBox" style="display:none"></div>
     <div id="itemsBox" style="display:none"></div>
+  </section>
+
+  <!-- ПЕРСОНАЛ -->
+  <section id="staff" class="tab">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+      <div class="seg big" id="staffSub">
+        <button data-s="att" class="on" data-i18n="s_att">🕘 Явка</button><button data-s="ops" data-i18n="s_ops">🍳 Кухня и доставка</button><button data-s="list" data-i18n="s_list">👥 Сотрудники</button>
+      </div>
+      <div class="row" style="flex-wrap:wrap;gap:8px">
+        <div class="seg" id="staffPeriod"><button data-p="today" class="on" data-i18n="p_today">Сегодня</button><button data-p="yesterday" data-i18n="p_yesterday">Вчера</button><button data-p="week" data-i18n="p_week">Неделя</button><button data-p="month" data-i18n="p_month">Месяц</button></div>
+        <select id="staffPoint"></select>
+      </div>
+    </div>
+    <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <span>📱 <b data-i18n="p_link">Страница для точки (отметка, кухня, курьер):</b></span>
+      <a id="pLink" href="/p" target="_blank" style="color:#67e8f9;font-weight:700"></a>
+      <button class="copy" style="float:none" id="pCopy" data-i18n="copy">Копировать</button>
+      <small data-i18n="p_link_hint">Откройте её на планшете или телефоне на каждой точке. Сотрудник входит по своему PIN.</small>
+    </div>
+    <div id="staffBox"></div>
   </section>
 
   <!-- СКЛАД -->
@@ -321,6 +342,7 @@ document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () =>
   if (b.dataset.tab === "menu") loadMenu();
   if (b.dataset.tab === "sales") refreshMain();
   if (b.dataset.tab === "stock") loadStock();
+  if (b.dataset.tab === "staff") loadStaffTab();
   if (b.dataset.tab === "wa") loadWA();
   if (b.dataset.tab === "mem") loadFacts();
   if (b.dataset.tab === "hist") loadHistory();
@@ -329,6 +351,15 @@ document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () =>
 // ---------- языки: русский / қазақша ----------
 const I18N = {
   ru: {
+    emp:"Сотрудник", emp_ph:"Имя сотрудника",
+    tab_staff:"Персонал", s_att:"🕘 Явка", s_ops:"🍳 Кухня и доставка", s_list:"👥 Сотрудники", p_link:"Страница для точки (отметка, кухня, курьер):",
+    p_link_hint:"Откройте её на планшете или телефоне на каждой точке. Сотрудник входит по своему PIN.", st_none:"Сотрудников пока нет — добавьте во вкладке «Сотрудники».",
+    on_shift:"Сейчас на смене", since:"с", h:"ч", nobody:"Никто не отметился", att_sum:"Сводка по сотрудникам", att_log:"Журнал прихода и ухода", role:"Должность",
+    hours:"Часов", lates:"Опоздания", missing:"Без отметки", came:"Пришёл", left:"Ушёл", late:"опоздание", min:"мин", no_out:"нет ухода", no_in:"нет прихода",
+    prep_avg:"Время приготовления (сред.)", del_avg:"Время доставки (сред.)", max:"макс", over:"дольше", couriers:"Курьеры", deliveries:"Доставок", avg:"Среднее",
+    prep_hours:"Приготовление по часам (красным — дольше нормы)", prep_col:"Готовка, мин", cook:"Повар", wait_col:"Ждал курьера", del_col:"Доставка, мин", courier_col:"Курьер",
+    ops_empty:"Пока нет отметок. Повар нажимает «Готово», курьер — «Забрал» и «Доставил» на странице точки.", st_add_emp:"Добавить сотрудника", auto:"авто",
+    pin_hint:"PIN — 4 цифры для входа на странице точки. Оставьте пустым — программа придумает сама. Повар видит кухню, курьер — доставку.", pin_bad:"PIN — ровно 4 цифры",
     tab_main:"Главная", sub_sales:"📊 Продажи", sub_orders:"🧾 Заказы", sub_items:"🍔 Товары", live:"⚡ Онлайн (каждые 30 сек)", updated:"обновлено",
     o_count:"Заказов", o_sum:"Сумма заказов", o_click:"нажмите на заказ — откроется состав", o_time:"Время", o_type:"Тип", o_status:"Статус", o_lines:"Поз.", o_total:"Сумма",
     i_total:"Всего товаров", i_sold:"продавались за период", i_sold_sum:"Продано на",
@@ -382,6 +413,15 @@ const I18N = {
     names:{}
   },
   kk: {
+    emp:"Қызметкер", emp_ph:"Қызметкердің аты",
+    tab_staff:"Қызметкерлер", s_att:"🕘 Келу", s_ops:"🍳 Асхана және жеткізу", s_list:"👥 Қызметкерлер", p_link:"Нүкте беті (белгі, асхана, курьер):",
+    p_link_hint:"Оны әр нүктедегі планшетте немесе телефонда ашыңыз. Қызметкер өз PIN-і арқылы кіреді.", st_none:"Әзірге қызметкер жоқ — «Қызметкерлер» бөлімінде қосыңыз.",
+    on_shift:"Қазір ауысымда", since:"бастап", h:"сағ", nobody:"Ешкім белгі қоймады", att_sum:"Қызметкерлер бойынша қорытынды", att_log:"Келу-кету журналы", role:"Лауазымы",
+    hours:"Сағат", lates:"Кешігулер", missing:"Белгісіз", came:"Келді", left:"Кетті", late:"кешігу", min:"мин", no_out:"кетуі жоқ", no_in:"келуі жоқ",
+    prep_avg:"Дайындау уақыты (орт.)", del_avg:"Жеткізу уақыты (орт.)", max:"макс", over:"ұзақ", couriers:"Курьерлер", deliveries:"Жеткізу", avg:"Орташа",
+    prep_hours:"Сағат бойынша дайындау (қызыл — нормадан ұзақ)", prep_col:"Дайындау, мин", cook:"Аспаз", wait_col:"Курьерді күтті", del_col:"Жеткізу, мин", courier_col:"Курьер",
+    ops_empty:"Әзірге белгі жоқ. Аспаз «Дайын», курьер «Алдым» және «Жеткіздім» батырмасын басады.", st_add_emp:"Қызметкер қосу", auto:"авто",
+    pin_hint:"PIN — нүкте бетіне кіру үшін 4 сан. Бос қалдырсаңыз, бағдарлама өзі ойлап табады.", pin_bad:"PIN — дәл 4 сан",
     tab_main:"Басты", sub_sales:"📊 Сатылым", sub_orders:"🧾 Тапсырыстар", sub_items:"🍔 Тауарлар", live:"⚡ Онлайн (әр 30 сек)", updated:"жаңартылды",
     o_count:"Тапсырыстар", o_sum:"Тапсырыстар сомасы", o_click:"тапсырысты басыңыз — құрамы ашылады", o_time:"Уақыты", o_type:"Түрі", o_status:"Күйі", o_lines:"Поз.", o_total:"Сома",
     i_total:"Барлық тауар", i_sold:"кезеңде сатылғаны", i_sold_sum:"Сатылды",
@@ -450,7 +490,7 @@ function applyLang(){
     OFFICE.setNames(NAME);
   if (INFO) setBadge();
   const on = document.querySelector("nav button.on[data-tab]")?.dataset.tab;
-  if (on === "menu") loadMenu(); if (on === "hist") loadHistory(); if (on === "sales") refreshMain(); if (on === "wa") loadWA(); if (on === "stock") { unitOptions($("#stUnit")); loadStock(); }
+  if (on === "menu") loadMenu(); if (on === "hist") loadHistory(); if (on === "sales") refreshMain(); if (on === "wa") loadWA(); if (on === "stock") { unitOptions($("#stUnit")); loadStock(); } if (on === "staff") loadStaffTab();
 }
 document.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
   LANG = b.dataset.lang; try { localStorage.setItem("fh_lang", LANG); } catch {} applyLang();
@@ -666,6 +706,84 @@ function renderItems(){
     ${rows.map(i => `<tr><td><b>${esc(i.name)}</b></td><td>${esc(i.category || "")}</td><td>${i.price != null ? fmt(i.price) + " ₸" : "—"}</td><td>${i.sold ? fmt(i.sold) + " ₸" : '<small>—</small>'}</td>
       <td>${i.sold ? `<div style="height:8px;border-radius:4px;background:linear-gradient(90deg,var(--acc),var(--acc2));width:${i.sold / mx * 100}%"></div>` : ""}</td><td><small>${esc((i.points || []).join(", "))}</small></td></tr>`).join("")}
   </table></div></div>`;
+}
+
+// ---------- персонал ----------
+let staffSub = "att", staffPeriod = "today", STAFF = [];
+const ROLES = ["Кассир", "Повар", "Курьер", "Администратор", "Другое"];
+const ROLES_KK = {"Кассир":"Кассир", "Повар":"Аспаз", "Курьер":"Курьер", "Администратор":"Әкімші", "Другое":"Басқа"};
+const roleName = r => LANG === "kk" ? (ROLES_KK[r] || r) : r;
+const shiftLbl = s => s === "night" ? "🌙 " + (LANG === "kk" ? "Түнгі 21:00" : "Ночная 21:00") : "☀️ " + (LANG === "kk" ? "Күндізгі 09:00" : "Дневная 09:00");
+$("#pLink").textContent = location.origin + "/p"; $("#pLink").href = "/p";
+$("#pCopy").onclick = () => { navigator.clipboard.writeText(location.origin + "/p"); $("#pCopy").textContent = t("copied"); };
+document.querySelectorAll("#staffSub button").forEach(b => b.onclick = () => { staffSub = b.dataset.s; document.querySelectorAll("#staffSub button").forEach(x => x.classList.toggle("on", x === b)); loadStaffTab(); });
+document.querySelectorAll("#staffPeriod button").forEach(b => b.onclick = () => { staffPeriod = b.dataset.p; document.querySelectorAll("#staffPeriod button").forEach(x => x.classList.toggle("on", x === b)); loadStaffTab(); });
+$("#staffPoint").onchange = () => loadStaffTab();
+async function loadStaffTab(){
+  const d = await (await fetch("/api/staff")).json(); STAFF = d.staff;
+  const sel = $("#staffPoint"), cur = sel.value;
+  sel.innerHTML = `<option value="">${t("all_points")}</option>` + d.points.map(p => `<option>${esc(p)}</option>`).join(""); sel.value = cur || "";
+  if (staffSub === "list") return renderStaffList(d.points);
+  if (staffSub === "att") return loadAttendance();
+  return loadOps();
+}
+const hm = iso => iso ? iso.slice(11, 16) : "—";
+const dm = iso => iso ? iso.slice(8, 10) + "." + iso.slice(5, 7) : "";
+async function loadAttendance(){
+  const box = $("#staffBox"); box.innerHTML = `<small>${t("loading")}</small>`;
+  const d = await (await fetch(`/api/attendance?period=${staffPeriod}&point=${encodeURIComponent($("#staffPoint").value)}`)).json();
+  if (!STAFF.length) { box.innerHTML = `<div class="card">${t("st_none")}</div>`; return; }
+  let html = `<div class="card"><h3>🟢 ${t("on_shift")} (${d.on_shift.length})</h3>${d.on_shift.length ? `<div class="kpis">${d.on_shift.map(v => `<div class="kpi"><small>${esc(roleName(v.role))} · ${esc(v.point)}</small><b style="font-size:17px">${esc(v.name)}</b><small>${t("since")} ${hm(v.in)} · ${v.hours ?? 0} ${t("h")}${v.late ? ` · <span class="down">${t("late")} ${v.late} ${t("min")}</span>` : ""}</small></div>`).join("")}</div>` : `<small>${t("nobody")}</small>`}</div>`;
+  if (d.summary.length) html += `<div class="card"><h3>${t("att_sum")}</h3><div class="md"><table><tr><th>${t("emp")}</th><th>${t("role")}</th><th>${t("point")}</th><th>${t("shifts_n")}</th><th>${t("hours")}</th><th>${t("lates")}</th><th>${t("missing")}</th></tr>
+    ${d.summary.map(s => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(roleName(s.role))}</td><td>${esc(s.point)}</td><td>${s.days}</td><td>${s.hours.toFixed(1)}</td>
+      <td>${s.lates ? `<span class="down">${s.lates} (${s.late_min} ${t("min")})</span>` : '<span class="up">0</span>'}</td><td>${s.missing ? `<span class="down">${s.missing}</span>` : "0"}</td></tr>`).join("")}</table></div></div>`;
+  html += `<div class="card"><h3>${t("att_log")}</h3>${d.visits.length ? `<div class="md"><table><tr><th>${t("date")}</th><th>${t("emp")}</th><th>${t("point")}</th><th>${t("came")}</th><th>${t("left")}</th><th>${t("hours")}</th><th></th></tr>
+    ${d.visits.map(v => `<tr><td>${dm(v.date)}</td><td>${esc(v.name)} <small>${esc(roleName(v.role))}</small></td><td>${esc(v.point)}</td><td>${hm(v.in)}</td><td>${v.open ? `<span class="up">● ${t("now")}</span>` : hm(v.out)}</td>
+      <td>${v.hours != null ? v.hours.toFixed(1) : "—"}</td><td>${v.late ? `<span class="down">⏰ ${v.late} ${t("min")}</span>` : ""}${v.no_out ? `<span class="down">${t("no_out")}</span>` : ""}${v.no_in ? `<span class="down">${t("no_in")}</span>` : ""}</td></tr>`).join("")}</table></div>` : `<small>${t("no_data")}</small>`}</div>`;
+  box.innerHTML = html;
+}
+async function loadOps(){
+  const box = $("#staffBox"); box.innerHTML = `<small>${t("loading")}</small>`;
+  const d = await (await fetch(`/api/ops?period=${staffPeriod}&point=${encodeURIComponent($("#staffPoint").value)}`)).json();
+  const n = d.norms;
+  let html = `<div class="kpis"><div class="kpi"><small>🍳 ${t("prep_avg")}</small><b>${d.prep_avg ?? "—"} ${t("min")}</b><small>${t("max")}: ${d.prep_max ?? "—"} · ${t("over")} ${n.prep} ${t("min")}: <span class="${d.prep_slow ? "down" : "up"}">${d.prep_slow}</span></small></div>
+    <div class="kpi"><small>🛵 ${t("del_avg")}</small><b>${d.delivery_avg ?? "—"} ${t("min")}</b><small>${t("max")}: ${d.delivery_max ?? "—"} · ${t("over")} ${n.delivery} ${t("min")}: <span class="${d.delivery_late ? "down" : "up"}">${d.delivery_late}</span></small></div></div>`;
+  if (d.couriers.length) html += `<div class="card"><h3>🛵 ${t("couriers")}</h3><div class="md"><table><tr><th>${t("emp")}</th><th>${t("deliveries")}</th><th>${t("avg")}</th><th>${t("max")}</th><th>${t("over")} ${n.delivery} ${t("min")}</th></tr>
+    ${d.couriers.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${c.count}</td><td>${c.avg ?? "—"} ${t("min")}</td><td>${c.max ?? "—"}</td><td>${c.late ? `<span class="down">${c.late}</span>` : '<span class="up">0</span>'}</td></tr>`).join("")}</table></div></div>`;
+  if (d.prep_by_hour.length) { const mx = Math.max(...d.prep_by_hour.map(h => h.avg || 0), 1);
+    html += `<div class="card"><h3>🍳 ${t("prep_hours")}</h3><div class="bars" style="height:140px">${d.prep_by_hour.map(h => `<div class="bar" style="height:${Math.max(4, h.avg / mx * 100)}%;${h.avg > n.prep ? "background:linear-gradient(180deg,#f87171,#f97316)" : ""}" data-t="${h.hour}:00 — ${h.avg} ${t("min")} (${h.count})"></div>`).join("")}</div>
+      <div style="display:flex;justify-content:space-around;font-size:11px;color:var(--mute)">${d.prep_by_hour.map(h => `<span>${h.hour}</span>`).join("")}</div></div>`; }
+  html += `<div class="card"><h3>${t("sub_orders")}</h3>${d.orders.length ? `<div class="md"><table><tr><th>№</th><th>${t("point")}</th><th>${t("o_time")}</th><th>🍳 ${t("prep_col")}</th><th>${t("cook")}</th><th>⏳ ${t("wait_col")}</th><th>🛵 ${t("del_col")}</th><th>${t("courier_col")}</th></tr>
+    ${d.orders.map(o => `<tr><td>${esc(o.number)}</td><td>${esc(o.point)}</td><td>${hm(o.created)}</td><td>${o.prep != null ? `<span class="${o.prep > n.prep ? "down" : ""}">${o.prep}</span>` : "—"}</td><td><small>${esc(o.ready_by || "")}</small></td>
+      <td>${o.wait ?? "—"}</td><td>${o.delivery != null ? `<span class="${o.delivery > n.delivery ? "down" : ""}">${o.delivery}</span>` : "—"}</td><td><small>${esc(o.delivered_by || o.picked_by || "")}</small></td></tr>`).join("")}</table></div>` : `<small>${t("ops_empty")}</small>`}</div>`;
+  box.innerHTML = html;
+}
+let stEditId = null;
+function renderStaffList(points){
+  const pOpt = sel => points.map(p => `<option ${p === sel ? "selected" : ""}>${esc(p)}</option>`).join("");
+  $("#staffBox").innerHTML = `<div class="card"><h3 id="sfTitle">${t("st_add_emp")}</h3><div class="stform" style="grid-template-columns:2fr 1.2fr 1.4fr 1.3fr 1fr auto auto">
+      <input type="text" id="sfName" placeholder="${t("emp_ph")}"><select id="sfRole">${ROLES.map(r => `<option value="${r}">${roleName(r)}</option>`).join("")}</select>
+      <select id="sfPoint">${pOpt(points[0])}</select><select id="sfShift"><option value="day">${shiftLbl("day")}</option><option value="night">${shiftLbl("night")}</option></select>
+      <input type="text" id="sfPin" maxlength="4" inputmode="numeric" placeholder="PIN (${t("auto")})">
+      <button class="main" id="sfSave" style="padding:10px 16px">${t("st_btn_add")}</button><button class="copy" id="sfCancel" style="float:none;display:none">${t("st_cancel")}</button></div>
+      <small>${t("pin_hint")}</small></div>
+    <div class="card">${STAFF.filter(s => s.active).length ? `<div class="md"><table><tr><th>${t("emp")}</th><th>${t("role")}</th><th>${t("point")}</th><th>${t("shift")}</th><th>PIN</th><th></th></tr>
+      ${STAFF.filter(s => s.active).map(s => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(roleName(s.role))}</td><td>${esc(s.point)}</td><td>${shiftLbl(s.shift)}</td><td><code>${esc(s.pin)}</code></td>
+        <td class="st-act"><button data-e="${s.id}">✎</button><button data-d="${s.id}">🗑</button></td></tr>`).join("")}</table></div>` : `<small>${t("st_none")}</small>`}</div>`;
+  const reset = () => { stEditId = null; $("#sfName").value = ""; $("#sfPin").value = ""; $("#sfSave").textContent = t("st_btn_add"); $("#sfTitle").textContent = t("st_add_emp"); $("#sfCancel").style.display = "none"; };
+  $("#sfCancel").onclick = reset;
+  $("#sfSave").onclick = async () => {
+    const body = {name:$("#sfName").value.trim(), role:$("#sfRole").value, point:$("#sfPoint").value, shift:$("#sfShift").value, pin:$("#sfPin").value.trim()};
+    if (!body.name) return $("#sfName").focus();
+    if (body.pin && !/^\d{4}$/.test(body.pin)) return alert(t("pin_bad"));
+    const r = await fetch(stEditId ? "/api/staff/" + stEditId : "/api/staff", {method: stEditId ? "PUT" : "POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    const d = await r.json(); if (!r.ok) return alert(d.detail); STAFF = d.staff; renderStaffList(points);
+  };
+  document.querySelectorAll("[data-e]").forEach(b => b.onclick = () => { const s = STAFF.find(x => x.id == b.dataset.e); stEditId = s.id;
+    $("#sfName").value = s.name; $("#sfRole").value = s.role; $("#sfPoint").value = s.point; $("#sfShift").value = s.shift || "day"; $("#sfPin").value = s.pin;
+    $("#sfSave").textContent = t("st_btn_save"); $("#sfTitle").textContent = t("st_edit") + ": " + s.name; $("#sfCancel").style.display = ""; });
+  document.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => { const s = STAFF.find(x => x.id == b.dataset.d);
+    if (!confirm(t("st_confirm") + " «" + s.name + "»?")) return; const d = await (await fetch("/api/staff/" + s.id, {method:"DELETE"})).json(); STAFF = d.staff; renderStaffList(points); });
 }
 
 // ---------- склад ----------
