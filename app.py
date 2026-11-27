@@ -30,12 +30,12 @@ PASSWORD = os.getenv("APP_PASSWORD", "").strip()
 TOKEN = hashlib.sha256(("foodhouse:" + PASSWORD).encode()).hexdigest() if PASSWORD else ""
 LOGIN_HTML = """<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Food house — вход</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-background:#1b1410;color:#f5ece4;font-family:system-ui,-apple-system,sans-serif}form{background:#261c16;border:1px solid #3a2b21;
-border-radius:16px;padding:32px;width:320px;text-align:center}h1{font-size:22px;margin:0 0 6px}h1 span{color:#ff8a2b}p{color:#b39f8f;margin:0 0 20px}
-input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #3a2b21;background:#1b1410;color:#f5ece4;font-size:16px}
-button{margin-top:12px;width:100%;padding:12px;border:0;border-radius:10px;background:#ff8a2b;color:#1b1410;font-weight:700;font-size:16px;cursor:pointer}
+background:radial-gradient(900px 500px at 20% 0%,#0b3a5c,transparent 60%),radial-gradient(800px 500px at 100% 100%,#4c1d95,transparent 60%),#03060d;color:#e6f1ff;font-family:system-ui,-apple-system,sans-serif}form{background:rgba(12,22,40,.75);backdrop-filter:blur(12px);border:1px solid #1b2b48;box-shadow:0 0 40px #22d3ee22;
+border-radius:16px;padding:32px;width:320px;text-align:center}h1{font-size:22px;margin:0 0 6px}h1 span{background:linear-gradient(90deg,#22d3ee,#a855f7);-webkit-background-clip:text;background-clip:text;color:transparent}p{color:#7f93b3;margin:0 0 20px}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #3a2b21;background:radial-gradient(900px 500px at 20% 0%,#0b3a5c,transparent 60%),radial-gradient(800px 500px at 100% 100%,#4c1d95,transparent 60%),#03060d;color:#e6f1ff;font-size:16px}
+button{margin-top:12px;width:100%;padding:12px;border:0;border-radius:10px;background:linear-gradient(135deg,#22d3ee,#a855f7);color:#020617;font-weight:700;font-size:16px;cursor:pointer}
 .err{color:#ff8f8f;margin-top:10px}</style></head><body><form method="post" action="/login">
-<h1>🍔 Food <span>house</span></h1><p>Штаб агентов</p><input type="password" name="password" placeholder="Пароль" autofocus>
+<h1>◈ Food <span>house</span></h1><p>Штаб агентов</p><input type="password" name="password" placeholder="Пароль" autofocus>
 <button>Войти</button>%ERR%</form></body></html>"""
 
 
@@ -85,6 +85,18 @@ class FactIn(BaseModel):
 @app.api_route("/", methods=["GET", "HEAD"])
 def index():
     return FileResponse(BASE / "index.html")
+
+
+# ---------- файлы 3D-офиса ----------
+STATIC_JS = {"three.module.min.js", "OrbitControls.js", "office3d.js"}
+
+
+@app.get("/{name}.js")
+def js_file(name: str):
+    fname = name + ".js"
+    if fname not in STATIC_JS:
+        raise HTTPException(404)
+    return FileResponse(BASE / fname, media_type="text/javascript", headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/api/info")
