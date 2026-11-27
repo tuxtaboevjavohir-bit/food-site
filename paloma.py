@@ -34,13 +34,25 @@ def accounts() -> list[dict]:
         label = re.split(r"[,;\n\r]", before)[-1]
         label = re.sub(r"(?i)bearer", "", label).strip(" \t\"'«»:=：-")
         named = bool(label)
-        out.append({"idx": len(out), "name": label or f"Аккаунт {len(out) + 1}", "key": m.group(0), "named": named})
+        out.append({"idx": len(out), "name": label, "key": m.group(0), "named": named})
     if not out:  # ключи другого формата: «Название:ключ, ключ2, …»
         for part in (p.strip() for p in re.split(r"[,;\n]", raw) if p.strip()):
             part = re.sub(r"(?i)^bearer\s+", "", part.strip("\"' "))
             named = ":" in part
             name, key = part.split(":", 1) if named else (f"Аккаунт {len(out) + 1}", part)
-            out.append({"idx": len(out), "name": name.strip(), "key": key.strip(), "named": named})
+            out.append({"idx": len(out), "name": name.strip() if named else "", "key": key.strip(), "named": named})
+    # без подписи — берём названия точек по порядку (28а, 13, Озен) из настроек
+    try:
+        import memory
+        pts = memory.points()
+    except Exception:
+        pts = []
+    for a in out:
+        if not a["named"]:
+            if a["idx"] < len(pts):
+                a["name"], a["named"] = pts[a["idx"]], True
+            else:
+                a["name"] = f"Аккаунт {a['idx'] + 1}"
     return out
 
 
@@ -253,6 +265,8 @@ def _build(period: str, loc: str) -> dict:
     with ThreadPoolExecutor(max_workers=8) as pool:
         for a, lid in targets:
             jobs[(a["idx"], lid, "series")] = pool.submit(q, a, lid, start, end, "net,orders", group)
+            if group != "day":
+                jobs[(a["idx"], lid, "tot")] = pool.submit(q, a, lid, start, end, "net,orders", "day")
             jobs[(a["idx"], lid, "prev")] = pool.submit(q, a, lid, pstart, pend, "net,orders", "day")
             jobs[(a["idx"], lid, "item")] = pool.submit(q, a, lid, start, end, "net", "item")
             if lid is None:
@@ -274,9 +288,14 @@ def _build(period: str, loc: str) -> dict:
         s = get((a["idx"], lid, "series"))
         if s:
             series.append(_rows(s, group))
-            t = _totals(s)
-            tot["net"] += t["net"] if t["net"] is not None else sum(r["net"] for r in series[-1])
-            tot["orders"] += t["orders"] if t["orders"] is not None else sum(r["orders"] or 0 for r in series[-1])
+        src = get((a["idx"], lid, "tot")) if (a["idx"], lid, "tot") in jobs else s
+        if src:
+            rows = _rows(src, "day")
+            t = _totals(src)
+            net = t["net"] if t["net"] else sum(r["net"] for r in rows)
+            orders = t["orders"] if t["orders"] else sum(r["orders"] or 0 for r in rows)
+            tot["net"] += net or 0
+            tot["orders"] += orders or 0
         p = get((a["idx"], lid, "prev"))
         if p:
             t = _totals(p); rows = _rows(p, "day")
