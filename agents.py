@@ -1,0 +1,201 @@
+"""ИИ-агенты Food house: директор раздаёт задачи, специалисты выполняют."""
+import base64
+import json
+import os
+import random
+import re
+import time
+
+import memory
+
+MODEL = os.getenv("FOODHOUSE_MODEL", "claude-sonnet-5-5")
+
+AGENTS = {
+    "director": {
+        "name": "Директор",
+        "emoji": "👔",
+        "role": (
+            "Ты директор кафе быстрого питания Food house. Ты получаешь задачу от владельца, "
+            "решаешь, кому из команды её поручить, и в конце сводишь ответы в короткий итог с планом действий."
+        ),
+    },
+    "marketer": {
+        "name": "Маркетолог",
+        "emoji": "📣",
+        "role": (
+            "Ты маркетолог кафе Food house. Акции, соцсети (TikTok, Instagram), тексты постов, "
+            "привлечение и удержание гостей, работа с отзывами. Давай конкретные идеи и готовые тексты."
+        ),
+    },
+    "financier": {
+        "name": "Финансист",
+        "emoji": "📊",
+        "role": (
+            "Ты финансист кафе Food house. Себестоимость, наценка, ценообразование, прогноз выручки, "
+            "точка безубыточности, бюджет. Считай по шагам и показывай формулы и цифры в тенге."
+        ),
+    },
+    "accountant": {
+        "name": "Бухгалтер",
+        "emoji": "🧾",
+        "role": (
+            "Ты бухгалтер кафе Food house в Казахстане. Учёт доходов и расходов, зарплаты, первичные документы, "
+            "отчётность. Объясняй просто; если вопрос касается налогового законодательства, напоминай сверить "
+            "с актуальными правилами или с налоговым консультантом."
+        ),
+    },
+}
+
+SPECIALISTS = ["marketer", "financier", "accountant"]
+
+
+def _client():
+    key = os.getenv("ANTHROPIC_API_KEY")
+    if not key:
+        return None
+    import anthropic
+
+    return anthropic.Anthropic(api_key=key)
+
+
+def demo_mode() -> bool:
+    return _client() is None
+
+
+def _ask(system: str, user_content, max_tokens: int = 1500) -> str:
+    client = _client()
+    msg = client.messages.create(
+        model=MODEL,
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": user_content}],
+    )
+    return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
+
+
+def _extract_json(text: str):
+    m = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
+    if m:
+        text = m.group(1)
+    start = min([i for i in (text.find("{"), text.find("[")) if i != -1], default=-1)
+    if start == -1:
+        raise ValueError("JSON не найден в ответе")
+    return json.loads(text[start:])
+
+
+# ------------------------------------------------------------------ задачи
+def run_task(task: str):
+    """Генератор событий для анимации: каждое событие — dict."""
+    ctx = memory.memory_context()
+    yield {"type": "status", "agent": "director", "state": "thinking", "text": "Читаю задачу…"}
+
+    # 1. Директор планирует
+    if demo_mode():
+        time.sleep(1)
+        plan = _demo_plan(task)
+    else:
+        system = AGENTS["director"]["role"] + "\n\n" + ctx
+        prompt = (
+            f"Задача от владельца: «{task}»\n\n"
+            "Реши, кому поручить. Доступны: marketer (маркетолог), financier (финансист), accountant (бухгалтер). "
+            "Выбери только нужных (1–3). Ответь строго JSON без пояснений:\n"
+            '{"comment": "одна фраза от директора", "assignments": [{"agent": "marketer", "task": "что сделать"}]}'
+        )
+        try:
+            plan = _extract_json(_ask(system, prompt, 800))
+        except Exception:
+            plan = {"comment": "Поручаю всем.", "assignments": [{"agent": a, "task": task} for a in SPECIALISTS]}
+
+    assignments = [a for a in plan.get("assignments", []) if a.get("agent") in SPECIALISTS] or [
+        {"agent": "marketer", "task": task}
+    ]
+    yield {"type": "plan", "agent": "director", "text": plan.get("comment", ""), "assignments": assignments}
+
+    # 2. Специалисты работают
+    results = []
+    for a in assignments:
+        aid = a["agent"]
+        yield {"type": "move", "agent": aid, "to": "director", "text": "Иду к директору за задачей"}
+        yield {"type": "status", "agent": aid, "state": "working", "text": a["task"]}
+        if demo_mode():
+            time.sleep(1.5)
+            answer = _demo_answer(aid, a["task"])
+        else:
+            system = AGENTS[aid]["role"] + "\n\n" + ctx + "\n\nОтвечай по-русски, структурно и по делу."
+            answer = _ask(system, f"Задача от директора: {a['task']}\n\nИсходный запрос владельца: {task}")
+        results.append({"agent": aid, "task": a["task"], "answer": answer})
+        yield {"type": "result", "agent": aid, "task": a["task"], "text": answer}
+        yield {"type": "status", "agent": aid, "state": "idle", "text": "Готово"}
+
+    # 3. Директор сводит итог
+    yield {"type": "status", "agent": "director", "state": "thinking", "text": "Свожу итог…"}
+    if demo_mode():
+        time.sleep(1)
+        summary = "Итог (демо-режим): команда отработала задачу. Добавьте ключ API в файл .env, чтобы агенты отвечали по-настоящему."
+    else:
+        joined = "\n\n".join(f"### {AGENTS[r['agent']]['name']}\n{r['answer']}" for r in results)
+        summary = _ask(
+            AGENTS["director"]["role"] + "\n\n" + ctx,
+            f"Задача владельца: «{task}»\n\nОтветы команды:\n{joined}\n\n"
+            "Сделай короткий итог для владельца: 3–6 пунктов плана действий с ответственными.",
+            1000,
+        )
+    yield {"type": "summary", "agent": "director", "text": summary}
+    yield {"type": "status", "agent": "director", "state": "idle", "text": "Жду новую задачу"}
+    memory.save_task(task, {"plan": plan, "results": results, "summary": summary})
+    yield {"type": "done"}
+
+
+# ------------------------------------------------------------------ меню по фото
+MENU_PROMPT = (
+    "На фото меню заведения. Распознай все позиции. Ответь строго JSON-массивом без пояснений:\n"
+    '[{"category": "Пицца", "name": "Маргарита", "price": 2500, "description": "состав, если указан"}]\n'
+    "Цену пиши числом в тенге без символов; если цены нет — null. Категорию бери из заголовков меню."
+)
+
+
+def recognize_menu(images: list[tuple[bytes, str]]) -> list[dict]:
+    """images — список (байты, mime-тип). Возвращает позиции меню."""
+    if demo_mode():
+        time.sleep(1)
+        return [
+            {"category": "Пицца", "name": "Маргарита (демо)", "price": 2500, "description": "томаты, моцарелла"},
+            {"category": "Бургеры", "name": "Чизбургер (демо)", "price": 1800, "description": ""},
+            {"category": "Напитки", "name": "Кола 0,5 (демо)", "price": 500, "description": ""},
+        ]
+    items = []
+    for data, mime in images:
+        if mime not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+            mime = "image/jpeg"
+        content = [
+            {"type": "image", "source": {"type": "base64", "media_type": mime, "data": base64.b64encode(data).decode()}},
+            {"type": "text", "text": MENU_PROMPT},
+        ]
+        text = _ask("Ты точно распознаёшь меню кафе с фотографий.", content, 4000)
+        parsed = _extract_json(text)
+        if isinstance(parsed, dict):
+            parsed = parsed.get("items", [])
+        items.extend(parsed)
+    return items
+
+
+# ------------------------------------------------------------------ демо-ответы
+def _demo_plan(task: str):
+    t = task.lower()
+    picks = []
+    if any(w in t for w in ("реклам", "акци", "пост", "тикток", "инста", "гост", "продвиж")):
+        picks.append("marketer")
+    if any(w in t for w in ("цен", "себесто", "прибыл", "выручк", "бюджет", "наценк")):
+        picks.append("financier")
+    if any(w in t for w in ("налог", "зарплат", "отчёт", "отчет", "учёт", "учет", "документ")):
+        picks.append("accountant")
+    if not picks:
+        picks = random.sample(SPECIALISTS, 2)
+    return {"comment": "Распределяю задачу по команде.", "assignments": [{"agent": p, "task": task} for p in picks]}
+
+
+def _demo_answer(agent: str, task: str) -> str:
+    return (
+        f"{AGENTS[agent]['name']} (демо-режим) взял задачу: «{task}».\n"
+        "Чтобы получить настоящий ответ, впишите ключ ANTHROPIC_API_KEY в файл .env и перезапустите программу."
+    )
