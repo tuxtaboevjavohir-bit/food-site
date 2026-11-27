@@ -22,7 +22,7 @@ import whatsapp  # noqa: E402
 from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
-APP_VERSION = "2026-11-27.7"
+APP_VERSION = "2026-11-27.8"
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
@@ -30,19 +30,19 @@ memory.init_db()
 PASSWORD = os.getenv("APP_PASSWORD", "").strip()
 TOKEN = hashlib.sha256(("foodhouse:" + PASSWORD).encode()).hexdigest() if PASSWORD else ""
 LOGIN_HTML = """<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Food house — вход</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+<title>Food house — вход</title><link rel="icon" href="/favicon.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
 background:radial-gradient(900px 500px at 20% 0%,#0b3a5c,transparent 60%),radial-gradient(800px 500px at 100% 100%,#4c1d95,transparent 60%),#03060d;color:#e6f1ff;font-family:system-ui,-apple-system,sans-serif}form{background:rgba(12,22,40,.75);backdrop-filter:blur(12px);border:1px solid #1b2b48;box-shadow:0 0 40px #22d3ee22;
 border-radius:16px;padding:32px;width:320px;text-align:center}h1{font-size:22px;margin:0 0 6px}h1 span{background:linear-gradient(90deg,#22d3ee,#a855f7);-webkit-background-clip:text;background-clip:text;color:transparent}p{color:#7f93b3;margin:0 0 20px}
 input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #3a2b21;background:radial-gradient(900px 500px at 20% 0%,#0b3a5c,transparent 60%),radial-gradient(800px 500px at 100% 100%,#4c1d95,transparent 60%),#03060d;color:#e6f1ff;font-size:16px}
 button{margin-top:12px;width:100%;padding:12px;border:0;border-radius:10px;background:linear-gradient(135deg,#22d3ee,#a855f7);color:#020617;font-weight:700;font-size:16px;cursor:pointer}
 .err{color:#ff8f8f;margin-top:10px}</style></head><body><form method="post" action="/login">
-<h1>◈ Food <span>house</span></h1><p>Штаб агентов</p><input type="password" name="password" placeholder="Пароль" autofocus>
+<img src="/logo.png" alt="Food house" style="width:96px;height:96px;border-radius:50%;box-shadow:0 0 30px #22d3ee55;margin-bottom:10px"><h1>Food <span>house</span></h1><p>Штаб агентов</p><input type="password" name="password" placeholder="Пароль" autofocus>
 <button>Войти</button>%ERR%</form></body></html>"""
 
 
 @app.middleware("http")
 async def auth(request: Request, call_next):
-    if not PASSWORD or request.url.path == "/login" or request.url.path.startswith("/webhook/"):
+    if not PASSWORD or request.url.path in ("/login", "/logo.png", "/favicon.png", "/favicon.ico", "/apple-touch-icon.png") or request.url.path.startswith("/webhook/"):
         return await call_next(request)
     if hmac.compare_digest(request.cookies.get("fh_auth", ""), TOKEN):
         return await call_next(request)
@@ -98,6 +98,18 @@ def js_file(name: str):
     if fname not in STATIC_JS:
         raise HTTPException(404)
     return FileResponse(BASE / fname, media_type="text/javascript", headers={"Cache-Control": "public, max-age=3600"})
+
+
+IMAGES = {"logo.png": "image/png", "apple-touch-icon.png": "image/png", "favicon.png": "image/png", "favicon.ico": "image/x-icon"}
+
+
+@app.get("/logo.png")
+@app.get("/apple-touch-icon.png")
+@app.get("/favicon.png")
+@app.get("/favicon.ico")
+def image_file(request: Request):
+    name = request.url.path.lstrip("/")
+    return FileResponse(BASE / name, media_type=IMAGES[name], headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/api/info")
