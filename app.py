@@ -185,6 +185,14 @@ def get_sales(days: int = 30):
         raise HTTPException(502, str(e))
 
 
+@app.get("/api/sales/raw")
+def sales_raw(group_by: str = "day", days: int = 7, metrics: str = "net,orders"):
+    try:
+        return paloma.raw(group_by, days, metrics)
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+
 @app.get("/api/sales/check")
 def check_sales():
     return paloma.check()

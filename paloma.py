@@ -40,6 +40,20 @@ def _get(path: str, params: dict | None = None):
     return r.json()
 
 
+def _unwrap(page):
+    """Находит сам отчёт в ответе: он может лежать сверху или внутри списка (results/data/…)."""
+    if not isinstance(page, dict):
+        return {}
+    if isinstance(page.get("rows"), list) or "totals" in page:
+        return page
+    for v in page.values():
+        if isinstance(v, list) and v and isinstance(v[0], dict) and ("rows" in v[0] or "totals" in v[0]):
+            return next((x for x in v if x.get("id") == "result"), v[0])
+        if isinstance(v, dict) and ("rows" in v or "totals" in v):
+            return v
+    return page
+
+
 def _all_pages(path: str, params: dict, max_pages: int = 10):
     """Собирает все страницы ответа (rows или data; cursor / next_cursor)."""
     first, rows_all, cursor = None, [], None
@@ -48,18 +62,26 @@ def _all_pages(path: str, params: dict, max_pages: int = 10):
         p.setdefault("limit", 200)
         if cursor:
             p["cursor"] = cursor
-        page = _get(path, p)
+        raw = _get(path, p)
+        page = _unwrap(raw)
         first = first or page
         rows = page.get("rows") if isinstance(page.get("rows"), list) else page.get("data")
         if isinstance(rows, list):
             rows_all.extend(rows)
-        cursor = page.get("next_cursor")
+        cursor = page.get("next_cursor") or (raw.get("next_cursor") if isinstance(raw, dict) else None)
         if not cursor:
             break
     if first is not None:
-        key = "rows" if isinstance(first.get("rows"), list) else "data"
+        key = "rows" if isinstance(first.get("rows"), list) or not isinstance(first.get("data"), list) else "data"
         first = dict(first, **{key: rows_all})
     return first
+
+
+def raw(group_by: str = "day", days: int = 7, metrics: str = "net,orders"):
+    """Сырой ответ Paloma — для диагностики."""
+    to = date.today()
+    frm = to - timedelta(days=max(1, min(int(days), 92)) - 1)
+    return _get("/reports/metrics", {"from": frm.isoformat(), "to": to.isoformat(), "metrics": metrics, "group_by": group_by})
 
 
 def _num(v):
