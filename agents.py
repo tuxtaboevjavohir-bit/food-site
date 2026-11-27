@@ -44,9 +44,41 @@ AGENTS = {
             "с актуальными правилами или с налоговым консультантом."
         ),
     },
+    "chef": {
+        "name": "Шеф-повар",
+        "emoji": "👨‍🍳",
+        "role": (
+            "Ты шеф-повар кафе быстрого питания Food house. Техкарты с граммовкой, себестоимость блюда по "
+            "ингредиентам, новые позиции меню, стандарты подачи и скорость отдачи. Давай граммовки и шаги приготовления."
+        ),
+    },
+    "smm": {
+        "name": "SMM-щик",
+        "emoji": "📱",
+        "role": (
+            "Ты SMM-специалист кафе Food house. Контент-план по дням, сценарии коротких видео для TikTok и Reels "
+            "(хук в первые 3 секунды, кадры, текст на экране), подписи и хештеги. Пиши готовые к публикации тексты."
+        ),
+    },
+    "hr": {
+        "name": "HR-менеджер",
+        "emoji": "🤝",
+        "role": (
+            "Ты HR-менеджер кафе Food house. Графики смен, тексты вакансий, собеседования, обучение новичков, "
+            "мотивация и удержание персонала. Графики оформляй таблицей."
+        ),
+    },
+    "buyer": {
+        "name": "Закупщик",
+        "emoji": "📦",
+        "role": (
+            "Ты закупщик кафе Food house. Списки закупок по меню, расчёт объёмов на неделю, выбор и сравнение "
+            "поставщиков, контроль остатков и списаний. Списки оформляй таблицей: продукт, количество, примерная цена."
+        ),
+    },
 }
 
-SPECIALISTS = ["marketer", "financier", "accountant"]
+SPECIALISTS = ["marketer", "financier", "accountant", "chef", "smm", "hr", "buyer"]
 
 
 def _client():
@@ -95,16 +127,17 @@ def run_task(task: str):
         plan = _demo_plan(task)
     else:
         system = AGENTS["director"]["role"] + "\n\n" + ctx
+        team = ", ".join(f"{a} ({AGENTS[a]['name'].lower()})" for a in SPECIALISTS)
         prompt = (
             f"Задача от владельца: «{task}»\n\n"
-            "Реши, кому поручить. Доступны: marketer (маркетолог), financier (финансист), accountant (бухгалтер). "
+            f"Реши, кому поручить. Доступны: {team}. "
             "Выбери только нужных (1–3). Ответь строго JSON без пояснений:\n"
             '{"comment": "одна фраза от директора", "assignments": [{"agent": "marketer", "task": "что сделать"}]}'
         )
         try:
             plan = _extract_json(_ask(system, prompt, 800))
         except Exception:
-            plan = {"comment": "Поручаю всем.", "assignments": [{"agent": a, "task": task} for a in SPECIALISTS]}
+            plan = {"comment": "Поручаю маркетологу и финансисту.", "assignments": [{"agent": a, "task": task} for a in ("marketer", "financier")]}
 
     assignments = [a for a in plan.get("assignments", []) if a.get("agent") in SPECIALISTS] or [
         {"agent": "marketer", "task": task}
@@ -189,6 +222,15 @@ def _demo_plan(task: str):
         picks.append("financier")
     if any(w in t for w in ("налог", "зарплат", "отчёт", "отчет", "учёт", "учет", "документ")):
         picks.append("accountant")
+    if any(w in t for w in ("блюд", "рецепт", "техкарт", "граммов", "кухн")):
+        picks.append("chef")
+    if any(w in t for w in ("контент", "видео", "reels", "хештег", "смм", "smm")):
+        picks.append("smm")
+    if any(w in t for w in ("смен", "сотрудн", "персонал", "ваканс", "график")):
+        picks.append("hr")
+    if any(w in t for w in ("закуп", "поставщ", "продукт", "остатк", "склад")):
+        picks.append("buyer")
+    picks = picks[:3]
     if not picks:
         picks = random.sample(SPECIALISTS, 2)
     return {"comment": "Распределяю задачу по команде.", "assignments": [{"agent": p, "task": task} for p in picks]}

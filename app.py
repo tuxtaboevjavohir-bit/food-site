@@ -28,7 +28,7 @@ class FactIn(BaseModel):
     text: str
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def index():
     return FileResponse(BASE / "static" / "index.html")
 
