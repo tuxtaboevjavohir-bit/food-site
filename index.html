@@ -278,7 +278,7 @@ const I18N = {
     m_cat:"Категория", m_dish:"Блюдо", m_desc:"Описание", m_price:"Цена", m_empty:"Меню пока не загружено.",
     rec_wait:"⏳ Распознаю меню, это может занять до минуты…", rec_ok:"✅ Распознано позиций: ",
     hist_empty:"Задач пока не было.", loading:"Загрузка…",
-    k_rev:"Выручка", k_avg:"В среднем за день", k_orders:"Заказов", k_days:"Дней с продажами",
+    k_rev:"Выручка", k_avg:"В среднем за день", k_orders:"Заказов", k_days:"Дней с продажами", k_check:"Средний чек", sales_warn:"⚠️ Часть отчётов Paloma недоступна (подробнее)",
     t_daily:"Выручка по дням", tbl:"таблица", t_items:"Продажи по блюдам", t_week:"По дням недели",
     sales_off:`<div class="card"><h3>Paloma365 не подключена</h3><div class="md"><ol>
       <li>Войдите в кабинет Paloma365 (владельцем аккаунта).</li>
@@ -319,7 +319,7 @@ const I18N = {
     m_cat:"Санат", m_dish:"Тағам", m_desc:"Сипаттама", m_price:"Баға", m_empty:"Мәзір әлі жүктелмеген.",
     rec_wait:"⏳ Мәзірді танып жатырмын, бір минутқа дейін созылуы мүмкін…", rec_ok:"✅ Танылған позициялар: ",
     hist_empty:"Әзірге тапсырма болған жоқ.", loading:"Жүктелуде…",
-    k_rev:"Түсім", k_avg:"Күніне орташа", k_orders:"Тапсырыстар", k_days:"Сатылым болған күндер",
+    k_rev:"Түсім", k_avg:"Күніне орташа", k_orders:"Тапсырыстар", k_days:"Сатылым болған күндер", k_check:"Орташа чек", sales_warn:"⚠️ Paloma есептерінің бір бөлігі қолжетімсіз (толығырақ)",
     t_daily:"Күндер бойынша түсім", tbl:"кесте", t_items:"Тағамдар бойынша сатылым", t_week:"Апта күндері бойынша",
     sales_off:`<div class="card"><h3>Paloma365 қосылмаған</h3><div class="md"><ol>
       <li>Paloma365 кабинетіне аккаунт иесі ретінде кіріңіз.</li>
@@ -399,25 +399,39 @@ async function loadSales(){
   try { const r = await fetch("/api/sales?days=" + $("#salesDays").value); d = await r.json(); if (!r.ok) throw new Error(d.detail); }
   catch (e) { box.innerHTML = `<div class="card err">${t("error")}: ${esc(e.message)}</div>`; return; }
   if (!d.connected) { box.innerHTML = t("sales_off"); return; }
+  const WD = LANG === "kk" ? ["", "Дс", "Сс", "Ср", "Бс", "Жм", "Сб", "Жс"] : ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+  const dayLbl = l => /^\d{4}-\d{2}-\d{2}/.test(l) ? l.slice(8, 10) + "." + l.slice(5, 7) : l;
   let html = "";
-  const daily = findRows(d.daily);
-  if (daily) {
-    const fr = daily.map(flat), keys = Object.keys(fr[0] || {});
-    const dk = keys.find(k => /date|day/i.test(k)), vk = pickKey(keys, /net|revenue|total|sum|amount|sales/i, fr[0]), ok = pickKey(keys, /order|receipt|check|count/i, fr[0]);
-    if (vk) {
-      const vals = fr.map(r => num(r[vk]) || 0), max = Math.max(...vals, 1), sum = vals.reduce((a, b) => a + b, 0);
-      const orders = ok ? fr.reduce((a, r) => a + (num(r[ok]) || 0), 0) : null, active = vals.filter(v => v > 0).length;
-      html += `<div class="kpis"><div class="kpi"><small>${t("k_rev")}</small><b>${fmt(sum)} ₸</b></div>
-        <div class="kpi"><small>${t("k_avg")}</small><b>${fmt(active ? sum / active : 0)} ₸</b></div>
-        ${orders != null ? `<div class="kpi"><small>${t("k_orders")}</small><b>${fmt(orders)}</b></div>` : ""}
-        <div class="kpi"><small>${t("k_days")}</small><b>${active}</b></div></div>
-        <div class="card"><h3>${t("t_daily")}</h3><div class="bars">${fr.map((r, i) => `<div class="bar" style="height:${Math.max(2, vals[i] / max * 100)}%" data-t="${esc(dk ? r[dk] : i + 1)}: ${fmt(vals[i])} ₸"></div>`).join("")}</div></div>`;
-    }
-    html += `<details class="card"><summary>${t("t_daily")} — ${t("tbl")}</summary>${table(daily, 100)}</details>`;
+  const daily = d.daily?.rows || [];
+  if (daily.length) {
+    const vals = daily.map(r => r.net || 0), max = Math.max(...vals, 1);
+    const sum = d.daily.totals.net ?? vals.reduce((a, b) => a + b, 0);
+    const orders = d.daily.totals.orders ?? daily.reduce((a, r) => a + (r.orders || 0), 0);
+    const active = vals.filter(v => v > 0).length;
+    html += `<div class="kpis"><div class="kpi"><small>${t("k_rev")}</small><b>${fmt(sum)} ₸</b></div>
+      <div class="kpi"><small>${t("k_avg")}</small><b>${fmt(active ? sum / active : 0)} ₸</b></div>
+      <div class="kpi"><small>${t("k_orders")}</small><b>${fmt(orders)}</b></div>
+      <div class="kpi"><small>${t("k_check")}</small><b>${fmt(orders ? sum / orders : 0)} ₸</b></div></div>
+      <div class="card"><h3>${t("t_daily")}</h3><div class="bars">${daily.map((r, i) => `<div class="bar" style="height:${Math.max(2, vals[i] / max * 100)}%" data-t="${esc(dayLbl(r.label))}: ${fmt(vals[i])} ₸ · ${fmt(r.orders)}"></div>`).join("")}</div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin-top:4px"><span>${esc(dayLbl(daily[0].label))}</span><span>${esc(dayLbl(daily[daily.length - 1].label))}</span></div></div>`;
   }
-  const items = findRows(d.by_item); if (items) html += `<div class="card"><h3>${t("t_items")}</h3>${table(items, 40)}</div>`;
-  const week = findRows(d.by_weekday); if (week) html += `<div class="card"><h3>${t("t_week")}</h3>${table(week, 7)}</div>`;
-  if (d.errors?.length) html += `<div class="card err">${d.errors.map(esc).join("<br>")}</div>`;
+  const items = d.by_item?.rows || [];
+  if (items.length) {
+    const top = items.slice(0, 30), mx = Math.max(...top.map(r => r.net || 0), 1), tot = items.reduce((a, r) => a + (r.net || 0), 0) || 1;
+    html += `<div class="card"><h3>${t("t_items")}</h3><div class="md"><table><tr><th>#</th><th>${t("m_dish")}</th><th>${t("k_rev")}</th><th>%</th><th style="width:40%"></th></tr>
+      ${top.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.label)}</td><td>${fmt(r.net)} ₸</td><td>${((r.net || 0) / tot * 100).toFixed(1)}</td>
+        <td><div style="height:8px;border-radius:4px;background:linear-gradient(90deg,var(--acc),var(--acc2));width:${(r.net || 0) / mx * 100}%"></div></td></tr>`).join("")}
+      </table></div></div>`;
+  }
+  const week = d.by_weekday?.rows || [];
+  if (week.length) {
+    const mx = Math.max(...week.map(r => r.net || 0), 1);
+    html += `<div class="card"><h3>${t("t_week")}</h3><div class="bars" style="height:140px">${week.map(r => {
+      const lbl = typeof r.id === "number" && WD[r.id] ? WD[r.id] : r.label;
+      return `<div class="bar" style="height:${Math.max(2, (r.net || 0) / mx * 100)}%" data-t="${esc(lbl)}: ${fmt(r.net)} ₸ · ${fmt(r.orders)}"></div>`; }).join("")}</div>
+      <div style="display:flex;justify-content:space-around;font-size:12px;color:var(--mute);margin-top:4px">${week.map(r => `<span>${esc(typeof r.id === "number" && WD[r.id] ? WD[r.id] : r.label)}</span>`).join("")}</div></div>`;
+  }
+  if (d.errors?.length) html += `<details class="card"><summary>${t("sales_warn")}</summary><div style="color:#fca5a5;font-size:13px;margin-top:8px">${d.errors.map(esc).join("<br>")}</div></details>`;
   if (!html) html = `<div class="card"><pre style="white-space:pre-wrap">${esc(JSON.stringify(d, null, 2)).slice(0, 5000)}</pre></div>`;
   box.innerHTML = html;
 }

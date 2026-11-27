@@ -41,28 +41,81 @@ def _get(path: str, params: dict | None = None):
 
 
 def _all_pages(path: str, params: dict, max_pages: int = 10):
-    """Собирает все страницы (cursor / next_cursor)."""
-    out, first, cursor = [], None, None
+    """Собирает все страницы ответа (rows или data; cursor / next_cursor)."""
+    first, rows_all, cursor = None, [], None
     for _ in range(max_pages):
-        p = dict(params, limit=params.get("limit", 200))
+        p = dict(params)
+        p.setdefault("limit", 200)
         if cursor:
             p["cursor"] = cursor
         page = _get(path, p)
-        if first is None:
-            first = page
-        rows = page.get("data") if isinstance(page, dict) else None
+        first = first or page
+        rows = page.get("rows") if isinstance(page.get("rows"), list) else page.get("data")
         if isinstance(rows, list):
-            out.extend(rows)
-        cursor = page.get("next_cursor") if isinstance(page, dict) else None
+            rows_all.extend(rows)
+        cursor = page.get("next_cursor")
         if not cursor:
             break
-    if isinstance(first, dict) and out:
-        first = dict(first, data=out, next_cursor=None)
+    if first is not None:
+        key = "rows" if isinstance(first.get("rows"), list) else "data"
+        first = dict(first, **{key: rows_all})
     return first
 
 
+def _num(v):
+    try:
+        return float(str(v).replace(" ", "").replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+
+
+def _label(d):
+    if isinstance(d, dict):
+        for k in ("name", "title", "label", "date", "value", "id"):
+            if d.get(k) not in (None, ""):
+                return d[k], d.get("id")
+        return json.dumps(d, ensure_ascii=False), None
+    return d, d
+
+
+def _norm(resp: dict, dim: str, names: dict | None = None) -> dict:
+    """Приводит ответ отчёта к виду {rows: [{label, id, net, orders}], totals: {net, orders}}."""
+    rows = resp.get("rows") if isinstance(resp.get("rows"), list) else resp.get("data") or []
+    out = []
+    for r in rows:
+        dims = r.get("dims") or r.get("key") or {}
+        d = dims.get(dim) if isinstance(dims, dict) and dim in dims else (next(iter(dims.values())) if isinstance(dims, dict) and dims else None)
+        label, rid = _label(d)
+        if names and str(rid) in names:
+            label = names[str(rid)]
+        vals = r.get("values") or {}
+        out.append({"label": str(label), "id": rid, "net": _num(vals.get("net")), "orders": _num(vals.get("orders"))})
+    tot = (resp.get("totals") or {})
+    tot = tot.get("values", tot) if isinstance(tot, dict) else {}
+    return {"rows": out, "totals": {"net": _num(tot.get("net")), "orders": _num(tot.get("orders"))}}
+
+
+_items_cache = {"t": 0, "names": {}}
+
+
+def item_names() -> dict:
+    """id → название блюда из каталога (кэш на час)."""
+    if time.time() - _items_cache["t"] < 3600 and _items_cache["names"]:
+        return _items_cache["names"]
+    names = {}
+    try:
+        data = _all_pages("/items", {}, 15)
+        for it in (data or {}).get("data", []) or (data or {}).get("rows", []):
+            if isinstance(it, dict) and not it.get("deleted") and it.get("id") is not None:
+                names[str(it["id"])] = it.get("name") or str(it["id"])
+    except Exception:
+        pass
+    _items_cache.update(t=time.time(), names=names)
+    return names
+
+
 def sales(days: int = 30) -> dict:
-    """Выручка по дням и топ блюд за последние `days` дней (до 92)."""
+    """Выручка по дням, по блюдам и по дням недели за последние `days` дней (до 92)."""
     if not connected():
         return {"connected": False}
     days = max(1, min(int(days), 92))
@@ -72,21 +125,24 @@ def sales(days: int = 30) -> dict:
     to = date.today()
     frm = to - timedelta(days=days - 1)
     rng = {"from": frm.isoformat(), "to": to.isoformat()}
-    result = {"connected": True, "from": rng["from"], "to": rng["to"], "errors": []}
+    res = {"connected": True, "from": rng["from"], "to": rng["to"], "errors": []}
+    # по дням: отчёт metrics с разбивкой по дню (работает даже без обновления базы)
     try:
-        result["daily"] = _get("/reports/sales-daily", rng)
+        res["daily"] = _norm(_all_pages("/reports/metrics", dict(rng, metrics="net,orders", group_by="day"), 3), "day")
     except Exception as e:
-        result["errors"].append(str(e))
+        res["errors"].append(str(e))
+    # по блюдам: только выручка (заказы по блюдам Paloma не считает)
     try:
-        result["by_item"] = _all_pages("/reports/metrics", dict(rng, metrics="net,orders", group_by="item"), 3)
+        res["by_item"] = _norm(_all_pages("/reports/metrics", dict(rng, metrics="net", group_by="item"), 5), "item", item_names())
+        res["by_item"]["rows"].sort(key=lambda r: -(r["net"] or 0))
     except Exception as e:
-        result["errors"].append(str(e))
+        res["errors"].append(str(e))
     try:
-        result["by_weekday"] = _get("/reports/metrics", dict(rng, metrics="net,orders", group_by="weekday"))
+        res["by_weekday"] = _norm(_all_pages("/reports/metrics", dict(rng, metrics="net,orders", group_by="weekday"), 1), "weekday")
     except Exception as e:
-        result["errors"].append(str(e))
-    _cache[ck] = (time.time(), result)
-    return result
+        res["errors"].append(str(e))
+    _cache[ck] = (time.time(), res)
+    return res
 
 
 def check() -> dict:
@@ -99,22 +155,26 @@ def check() -> dict:
         return {"ok": False, "error": str(e)}
 
 
-def context_for_agents(max_chars: int = 6000) -> str:
-    """Краткая выжимка продаж для агентов (сырые данные Paloma в JSON, обрезанные по длине)."""
+def context_for_agents(max_rows: int = 40) -> str:
+    """Краткая выжимка продаж для агентов: суммы по дням, топ блюд, дни недели."""
     if not connected():
         return ""
     try:
         s = sales(30)
     except Exception as e:
         return f"\nПРОДАЖИ (Paloma365): ошибка загрузки — {e}"
-    parts = []
-    for name, label in (("daily", "Выручка по дням"), ("by_item", "Продажи по блюдам"), ("by_weekday", "По дням недели")):
-        if s.get(name) is not None:
-            txt = json.dumps(s[name], ensure_ascii=False, separators=(",", ":"))
-            parts.append(f"{label}: {txt[: max_chars // 3]}")
-    if not parts:
-        return "\nПРОДАЖИ (Paloma365): данные недоступны. " + "; ".join(s.get("errors", []))
-    return (
-        f"\nПРОДАЖИ из кассы Paloma365 за {s['from']} — {s['to']} (суммы — строки в валюте счёта):\n"
-        + "\n".join(parts)
-    )
+    f = lambda v: "—" if v is None else f"{v:,.0f}".replace(",", " ")
+    wd = {1: "Пн", 2: "Вт", 3: "Ср", 4: "Чт", 5: "Пт", 6: "Сб", 7: "Вс"}
+    lines = [f"\nПРОДАЖИ из кассы Paloma365 за {s['from']} — {s['to']} (₸):"]
+    if s.get("daily"):
+        t = s["daily"]["totals"]
+        lines.append(f"Итого: выручка {f(t['net'])} ₸, заказов {f(t['orders'])}")
+        lines.append("По дням: " + "; ".join(f"{r['label']}: {f(r['net'])} ₸/{f(r['orders'])} зак." for r in s["daily"]["rows"][-31:]))
+    if s.get("by_item"):
+        lines.append("Топ блюд по выручке: " + "; ".join(f"{r['label']}: {f(r['net'])} ₸" for r in s["by_item"]["rows"][:max_rows]))
+    if s.get("by_weekday"):
+        lines.append("По дням недели: " + "; ".join(
+            f"{wd.get(r['id'], r['label']) if isinstance(r['id'], int) else r['label']}: {f(r['net'])} ₸/{f(r['orders'])} зак." for r in s["by_weekday"]["rows"]))
+    if s.get("errors"):
+        lines.append("(часть отчётов недоступна: " + "; ".join(s["errors"])[:300] + ")")
+    return "\n".join(lines)
