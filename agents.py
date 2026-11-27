@@ -5,6 +5,7 @@ import os
 import random
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import memory
 import paloma
@@ -165,24 +166,33 @@ def run_task(task: str, lang: str = "ru"):
     ]
     yield {"type": "plan", "agent": "director", "text": plan.get("comment", ""), "assignments": assignments}
 
-    # 2. Специалисты работают
-    results = []
-    for a in assignments:
+    # 2. Специалисты работают одновременно
+    def work(a):
         aid = a["agent"]
-        yield {"type": "move", "agent": aid, "to": "director", "text": "Иду к директору за задачей"}
-        yield {"type": "status", "agent": aid, "state": "working", "text": a["task"]}
         if demo_mode():
             time.sleep(1.5)
-            answer = _demo_answer(aid, a["task"])
-        else:
-            system = (
-                AGENTS[aid]["role"] + "\n\n" + ctx + "\n\nОтвечай по-русски, структурно и по делу. "
-                "Используй Markdown: заголовки, списки, таблицы. Уложись примерно в 400–600 слов."
-            )
-            answer = _ask(system, f"Задача от директора: {a['task']}\n\nИсходный запрос владельца: {task}", 6000)
-        results.append({"agent": aid, "task": a["task"], "answer": answer})
-        yield {"type": "result", "agent": aid, "task": a["task"], "text": answer}
-        yield {"type": "status", "agent": aid, "state": "idle", "text": "Готово"}
+            return _demo_answer(aid, a["task"])
+        system = (
+            AGENTS[aid]["role"] + "\n\n" + ctx + "\n\nОтвечай структурно и по делу, на языке из правила ЯЗЫК. "
+            "Используй Markdown: заголовки, списки, таблицы. Уложись примерно в 400–600 слов."
+        )
+        try:
+            return _ask(system, f"Задача от директора: {a['task']}\n\nИсходный запрос владельца: {task}", 6000)
+        except Exception as e:
+            return f"⚠️ Ошибка: {e}"
+
+    for a in assignments:
+        yield {"type": "move", "agent": a["agent"], "to": "director", "text": "Иду к директору за задачей"}
+        yield {"type": "status", "agent": a["agent"], "state": "working", "text": a["task"]}
+    results = []
+    with ThreadPoolExecutor(max_workers=len(assignments)) as pool:
+        futures = {pool.submit(work, a): a for a in assignments}
+        for fut in as_completed(futures):
+            a = futures[fut]
+            answer = fut.result()
+            results.append({"agent": a["agent"], "task": a["task"], "answer": answer})
+            yield {"type": "result", "agent": a["agent"], "task": a["task"], "text": answer}
+            yield {"type": "status", "agent": a["agent"], "state": "idle", "text": "Готово"}
 
     # 3. Директор сводит итог
     yield {"type": "status", "agent": "director", "state": "thinking", "text": "Свожу итог…"}

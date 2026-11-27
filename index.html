@@ -109,6 +109,10 @@
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:160px}
   .kpi b{display:block;font-size:22px;color:#67e8f9;text-shadow:0 0 12px #22d3ee66}
   @media (max-width:760px){.wa{grid-template-columns:1fr}}
+  .tstatus{display:none;align-items:center;gap:10px;margin:-6px 0 12px;color:#a5f3fc;font-size:14px}
+  .tstatus.on{display:flex}
+  .spin{width:16px;height:16px;border:2px solid #22d3ee44;border-top-color:#22d3ee;border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
 </style>
 
 </head>
@@ -135,6 +139,7 @@
       <textarea id="taskText" rows="2" data-i18n-ph="task_ph" placeholder="Задача для команды"></textarea>
       <button id="sendBtn" class="main" data-i18n="send">Поручить</button>
     </div>
+    <div id="taskStatus" class="tstatus"></div>
     <div class="chips" id="chips"></div>
     <div id="results"></div>
   </section>
@@ -263,7 +268,7 @@ const I18N = {
   ru: {
     title:"штаб агентов", tab_hq:"Штаб", tab_sales:"Продажи", tab_menu:"Меню", tab_mem:"Память", tab_hist:"История",
     task_ph:"Задача для команды, например: придумай новое блюдо, посчитай себестоимость и сними про него видео для TikTok",
-    send:"Поручить", sales_h:"Продажи из Paloma365", days:"дней", refresh:"Обновить",
+    send:"Поручить", working:"Агенты работают", sec:"сек", ready:"готово", sales_h:"Продажи из Paloma365", days:"дней", refresh:"Обновить",
     wa_h:"Переписка с гостями", wa_auto:"Автоответ ИИ", wa_ideas:"💡 Идеи из переписки", wa_pick:"Выберите чат слева",
     wa_ph:"Ответ гостю…", wa_send:"Отправить",
     drop:"Перетащите сюда фото или PDF меню, или выберите", gallery:"Из галереи", file:"Файлом (фото или PDF)", camera:"Камера",
@@ -304,7 +309,7 @@ const I18N = {
   kk: {
     title:"агенттер штабы", tab_hq:"Штаб", tab_sales:"Сатылым", tab_menu:"Мәзір", tab_mem:"Жады", tab_hist:"Тарих",
     task_ph:"Командаға тапсырма, мысалы: жаңа тағам ойлап тап, өзіндік құнын есепте және ол туралы TikTok-қа видео түсір",
-    send:"Тапсыру", sales_h:"Paloma365 сатылымдары", days:"күн", refresh:"Жаңарту",
+    send:"Тапсыру", working:"Агенттер жұмыс істеп жатыр", sec:"сек", ready:"дайын", sales_h:"Paloma365 сатылымдары", days:"күн", refresh:"Жаңарту",
     wa_h:"Қонақтармен хат алмасу", wa_auto:"ЖИ автожауабы", wa_ideas:"💡 Хаттардан идеялар", wa_pick:"Сол жақтан чатты таңдаңыз",
     wa_ph:"Қонаққа жауап…", wa_send:"Жіберу",
     drop:"Мәзірдің фотосын немесе PDF файлын осында сүйреңіз немесе таңдаңыз", gallery:"Галереядан", file:"Файлмен (фото не PDF)", camera:"Камера",
@@ -539,10 +544,20 @@ function showCard(ev){
   if (ev.type === "error") R.insertAdjacentHTML("afterbegin", `<div class="card err">${t("error")}: ${esc(ev.text)}</div>`);
 }
 
-let busy = false;
+let busy = false, tTimer = null, tDone = 0, tTotal = 0;
+function setStatus(on){
+  const el = $("#taskStatus"); clearInterval(tTimer);
+  if (!on) { el.classList.remove("on"); $("#sendBtn").textContent = t("send"); return; }
+  const t0 = Date.now(); el.classList.add("on");
+  const draw = () => { const sec = Math.round((Date.now() - t0) / 1000);
+    el.innerHTML = `<div class="spin"></div><span>${t("working")} · ${sec} ${t("sec")}${tTotal ? ` · ${t("ready")}: ${tDone}/${tTotal}` : ""}</span>`; };
+  draw(); tTimer = setInterval(draw, 1000); $("#sendBtn").textContent = "⏳";
+}
 async function sendTask(){
-  const text = $("#taskText").value.trim(); if (!text || busy) return;
-  busy = true; OFFICE.setBusy(true); $("#sendBtn").disabled = true; $("#results").innerHTML = "";
+  const text = $("#taskText").value.trim();
+  if (!text) { $("#taskText").focus(); $("#taskText").style.borderColor = "#f87171"; setTimeout(() => $("#taskText").style.borderColor = "", 1200); return; }
+  if (busy) return;
+  busy = true; tDone = 0; tTotal = 0; OFFICE.setBusy(true); $("#sendBtn").disabled = true; $("#results").innerHTML = ""; setStatus(true);
   try {
     const res = await fetch("/api/task", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text, lang: LANG})});
     if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
@@ -552,11 +567,14 @@ async function sendTask(){
       buf += dec.decode(value, {stream:true});
       let i; while ((i = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0,i).trim(); buf = buf.slice(i+1);
-        if (line) { const ev = JSON.parse(line); showCard(ev); enqueue(() => handle(ev)); }
+        if (line) { const ev = JSON.parse(line);
+          if (ev.type === "plan") tTotal = (ev.assignments || []).length + 1;
+          if (ev.type === "result" || ev.type === "summary") tDone++;
+          showCard(ev); enqueue(() => handle(ev)); }
       }
     }
   } catch (e) { const ev = {type:"error", text:e.message}; showCard(ev); enqueue(() => handle(ev)); }
-  busy = false; $("#sendBtn").disabled = false;
+  busy = false; $("#sendBtn").disabled = false; setStatus(false);
   enqueue(() => { if (!busy) OFFICE.setBusy(false); });
 }
 $("#sendBtn").onclick = sendTask;
