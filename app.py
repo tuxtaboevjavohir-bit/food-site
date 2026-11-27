@@ -9,7 +9,6 @@ load_dotenv(Path(__file__).parent / ".env")
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile  # noqa: E402
 from fastapi.responses import FileResponse, StreamingResponse  # noqa: E402
-from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 import agents  # noqa: E402
@@ -30,7 +29,7 @@ class FactIn(BaseModel):
 
 @app.api_route("/", methods=["GET", "HEAD"])
 def index():
-    return FileResponse(BASE / "static" / "index.html")
+    return FileResponse(BASE / "index.html")
 
 
 @app.get("/api/info")
@@ -104,8 +103,6 @@ async def upload_menu(files: list[UploadFile] = File(...), mode: str = Form("rep
         memory.replace_menu(items)
     return {"recognized": len(items), "menu": memory.list_menu()}
 
-
-app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 if __name__ == "__main__":
     import uvicorn
