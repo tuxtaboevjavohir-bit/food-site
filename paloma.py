@@ -656,3 +656,11 @@ def _items(period, loc):
         catalog.setdefault(name, {"name": name, "price": None, "category": None, "points": [], "sold": 0.0})["sold"] = net
     items = sorted(catalog.values(), key=lambda x: (-(x["sold"] or 0), x["name"]))
     return {"connected": True, "from": rep.get("from"), "to": rep.get("to"), "items": items, "errors": list(dict.fromkeys(errors))}
+
+
+def metrics_catalog():
+    """Список доступных показателей Paloma (для подбора «чеков»)."""
+    out = {}
+    for a in accounts()[:1]:
+        out[a["name"]] = _get(a["key"], "/reports/metrics/catalog")
+    return out

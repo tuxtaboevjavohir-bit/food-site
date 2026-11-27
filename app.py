@@ -22,7 +22,7 @@ import whatsapp  # noqa: E402
 from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
-APP_VERSION = "2026-11-27.6"
+APP_VERSION = "2026-11-27.7"
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
@@ -292,6 +292,14 @@ def points_set(body: PointsIn):
 def sales_raw(group_by: str = "day", days: int = 7, metrics: str = "net,orders"):
     try:
         return paloma.raw(group_by, days, metrics)
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+
+@app.get("/api/sales/catalog")
+def sales_catalog():
+    try:
+        return paloma.metrics_catalog()
     except Exception as e:
         raise HTTPException(502, str(e))
 
