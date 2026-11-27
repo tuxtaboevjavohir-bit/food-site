@@ -310,6 +310,7 @@ document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () =>
 // ---------- языки: русский / қазақша ----------
 const I18N = {
   ru: {
+    t_shifts:"По сменам", shifts_n:"смен", k_avg_shift:"в среднем за смену", date:"Дата", shift:"Смена", now:"сейчас", no_data:"Нет данных за период.",
     tab_stock:"Склад", p_today:"Сегодня", p_yesterday:"Вчера", p_week:"Неделя", p_month:"Месяц", all_points:"Все точки", point:"Точка",
     k_prev:"Прошлый период", t_hourly:"Выручка по часам", t_points:"По точкам",
     stock_h:"Склад", st_search:"Поиск…", st_ask:"🤖 Что закупить?", st_add:"Добавить продукт", st_name:"Название", st_cat:"Категория",
@@ -359,6 +360,7 @@ const I18N = {
     names:{}
   },
   kk: {
+    t_shifts:"Ауысымдар бойынша", shifts_n:"ауысым", k_avg_shift:"бір ауысымға орташа", date:"Күні", shift:"Ауысым", now:"қазір", no_data:"Кезең бойынша дерек жоқ.",
     tab_stock:"Қойма", p_today:"Бүгін", p_yesterday:"Кеше", p_week:"Апта", p_month:"Ай", all_points:"Барлық нүктелер", point:"Нүкте",
     k_prev:"Өткен кезең", t_hourly:"Сағат бойынша түсім", t_points:"Нүктелер бойынша",
     stock_h:"Қойма", st_search:"Іздеу…", st_ask:"🤖 Не сатып алу керек?", st_add:"Өнім қосу", st_name:"Атауы", st_cat:"Санат",
@@ -519,6 +521,36 @@ async function loadSales(){
       <div style="display:flex;justify-content:space-around;font-size:12px;color:var(--mute);margin-top:4px">${week.map(r => `<span>${esc(wl(r))}</span>`).join("")}</div></div>`;
   }
   if (d.errors?.length) html += `<details class="card"><summary>${t("sales_warn")}</summary><div style="color:#fca5a5;font-size:13px;margin-top:8px">${d.errors.map(esc).join("<br>")}</div></details>`;
+  box.innerHTML = html.replace('<div class="card">', '<div id="shiftBox"></div><div class="card">');
+  if (!box.querySelector("#shiftBox")) box.insertAdjacentHTML("beforeend", '<div id="shiftBox"></div>');
+  loadShifts();
+}
+
+// ---------- смены ----------
+const SHIFT_ICON = n => /ноч|түн/i.test(n) ? "🌙" : "☀️";
+const shiftName = n => LANG === "kk" ? (/ноч/i.test(n) ? "Түнгі" : /днев/i.test(n) ? "Күндізгі" : n) : n;
+async function loadShifts(){
+  const box = $("#shiftBox"); if (!box) return;
+  box.innerHTML = `<div class="card"><small>${t("loading")} (${t("t_shifts")})</small></div>`;
+  let d;
+  try { const r = await fetch(`/api/shifts?period=${salesPeriod}&loc=${encodeURIComponent($("#salesLoc").value)}`); d = await r.json(); if (!r.ok) throw new Error(d.detail); }
+  catch (e) { box.innerHTML = `<div class="card err">${t("t_shifts")}: ${esc(e.message)}</div>`; return; }
+  if (!d.connected) { box.innerHTML = ""; return; }
+  const rows = d.rows || [], pts = d.points || [];
+  if (!rows.length) {
+    box.innerHTML = `<div class="card"><h3>${t("t_shifts")}</h3><small>${t("no_data")}</small>${d.errors?.length ? `<div style="color:#fca5a5;font-size:12px;margin-top:6px">${d.errors.map(esc).join("<br>")}</div>` : ""}</div>`;
+    return;
+  }
+  const cfg = d.shifts || [], hh = h => String(h).padStart(2, "0") + ":00";
+  let html = `<div class="kpis">` + cfg.map(s => { const T = d.totals[s.name] || {};
+    return `<div class="kpi"><small>${SHIFT_ICON(s.name)} ${esc(shiftName(s.name))} ${hh(s.start)}–${hh(s.end)} · ${T.count || 0} ${t("shifts_n")}</small><b>${fmt(T.net)} ₸</b>
+      <small>${t("k_orders")}: ${fmt(T.orders)} · ${t("k_avg_shift")}: ${fmt(T.count ? T.net / T.count : 0)} ₸</small></div>`; }).join("") + `</div>`;
+  const dl = x => x.slice(8, 10) + "." + x.slice(5, 7);
+  html += `<div class="card"><h3>${t("t_shifts")}</h3><div class="md"><table><tr><th>${t("date")}</th><th>${t("shift")}</th><th>${t("k_rev")}</th><th>${t("k_orders")}</th><th>${t("k_check")}</th>${pts.map(p => `<th>${esc(p)}</th>`).join("")}</tr>
+    ${rows.map(b => { const cur = d.current && b.date === d.current.date && b.shift === d.current.shift;
+      return `<tr${cur ? ' style="background:#0e3a5c88"' : ""}><td>${dl(b.date)}</td><td>${SHIFT_ICON(b.shift)} ${esc(shiftName(b.shift))}${cur ? ` <span class="up">● ${t("now")}</span>` : ""}</td>
+      <td><b>${fmt(b.net)} ₸</b></td><td>${fmt(b.orders)}</td><td>${b.orders ? fmt(b.net / b.orders) + " ₸" : "—"}</td>${pts.map(p => `<td>${fmt(b.by_point[p] || 0)}</td>`).join("")}</tr>`; }).join("")}
+  </table></div>${d.errors?.length ? `<div style="color:#fca5a5;font-size:12px;margin-top:6px">${d.errors.map(esc).join("<br>")}</div>` : ""}</div>`;
   box.innerHTML = html;
 }
 $("#salesBtn").onclick = loadSales; $("#salesLoc").onchange = loadSales;

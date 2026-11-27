@@ -373,8 +373,164 @@ def context_for_agents(max_rows: int = 40) -> str:
             lines.append("Топ блюд по выручке (30 дн.): " + "; ".join(f"{x['label']}: {f(x['net'])}" for x in m["by_item"][:max_rows]))
         if m.get("by_weekday"):
             lines.append("По дням недели: " + "; ".join(f"{wd.get(x['id'], x['label']) if isinstance(x['id'], int) else x['label']}: {f(x['net'])}" for x in m["by_weekday"]))
+        try:
+            sr = shift_report("week", "all")
+            if sr.get("rows"):
+                lines.append("По сменам за 7 дней (дневная 09–21, ночная 21–09): " + "; ".join(
+                    f"{b['date']} {b['shift']}: {f(b['net'])} ₸/{f(b['orders'])} зак." for b in sr["rows"][:14]))
+        except Exception:
+            pass
         if m.get("errors"):
             lines.append("(часть отчётов недоступна: " + "; ".join(m["errors"])[:300] + ")")
     except Exception as e:
         lines.append(f"ошибка загрузки — {e}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------- смены
+DEFAULT_SHIFTS = [{"name": "Дневная", "start": 9, "end": 21}, {"name": "Ночная", "start": 21, "end": 9}]
+
+
+def shifts_cfg() -> list[dict]:
+    try:
+        import memory
+        v = json.loads(memory.get_setting("shifts", "") or "[]")
+        if isinstance(v, list) and v:
+            return v
+    except Exception:
+        pass
+    return DEFAULT_SHIFTS
+
+
+def _shift_of(dt: datetime, cfg: list[dict]):
+    """Возвращает (дата начала смены, имя смены) для момента dt."""
+    h = dt.hour
+    for s in cfg:
+        a, b = int(s["start"]), int(s["end"])
+        if a < b and a <= h < b:
+            return dt.date(), s["name"]
+        if a > b and (h >= a or h < b):  # смена через полночь
+            return (dt.date() if h >= a else dt.date() - timedelta(days=1)), s["name"]
+    return dt.date(), "—"
+
+
+_ISO = re.compile(r"(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})")
+
+
+def _hour_of(v):
+    if isinstance(v, dict):
+        v = v.get("id", v.get("name", v.get("value")))
+    m = re.search(r"\d{1,2}", str(v))
+    return int(m.group(0)) if m else None
+
+
+def _date_of(v):
+    if isinstance(v, dict):
+        v = v.get("id") or v.get("date") or v.get("name") or v.get("value")
+    m = re.search(r"\d{4}-\d{2}-\d{2}", str(v))
+    return date.fromisoformat(m.group(0)) if m else None
+
+
+def _moments_day_hour(resp):
+    """Строки «день × час» → [(datetime, net, orders)]."""
+    out = []
+    for r in resp.get("rows", []):
+        dims = r.get("dims") or r.get("key") or {}
+        d = h = None
+        for k, v in dims.items():
+            if "day" in k or "date" in k:
+                d = _date_of(v)
+            elif "hour" in k:
+                h = _hour_of(v)
+        if d is None or h is None:
+            return None
+        vals = r.get("values") or {}
+        out.append((datetime(d.year, d.month, d.day, h), _num(vals.get("net")) or 0, _num(vals.get("orders")) or 0))
+    return out
+
+
+def _moments_receipts(resp):
+    """Строки «чек» → [(datetime закрытия/открытия, net, 1)]."""
+    out = []
+    for r in resp.get("rows", []):
+        txt = json.dumps(r.get("dims") or r.get("key") or {}, ensure_ascii=False)
+        times = _ISO.findall(txt)
+        if not times:
+            return None
+        d, hh, mm = times[-1]  # последнее время — обычно закрытие чека
+        y, mo, da = map(int, d.split("-"))
+        vals = r.get("values") or {}
+        out.append((datetime(y, mo, da, int(hh), int(mm)), _num(vals.get("net")) or 0, 1))
+    return out
+
+
+def shift_report(period: str = "week", loc: str = "all") -> dict:
+    if not connected():
+        return {"connected": False}
+    return _cached(f"shift:{period}:{loc}", lambda: _build_shifts(period, loc))
+
+
+def _build_shifts(period: str, loc: str) -> dict:
+    start, end, *_ = _range(period)
+    cfg = shifts_cfg()
+    q_end = min(end + timedelta(days=1), today())   # ночная смена заканчивается на следующий день
+    accs = accounts()
+    targets = []
+    if loc and loc != "all" and ":" in loc:
+        ai, lid = loc.split(":", 1)
+        a = next((x for x in accs if str(x["idx"]) == ai), None)
+        if a:
+            targets.append((a, lid or None))
+    if not targets:
+        targets = [(a, None) for a in accs]
+    res = {"connected": True, "from": start.isoformat(), "to": end.isoformat(), "shifts": cfg, "errors": [], "method": None}
+    buckets = {}  # (date, shift) -> {net, orders, by_point{}}
+
+    def load(a, lid):
+        base = {"from": start.isoformat(), "to": q_end.isoformat()}
+        if lid:
+            base["location_id"] = lid
+        errs = []
+        for group_by, parser, method in (("day,hour", _moments_day_hour, "day×hour"), ("receipt", _moments_receipts, "receipts")):
+            try:
+                resp = _pages(a["key"], "/reports/metrics", dict(base, metrics="net,orders" if group_by != "receipt" else "net", group_by=group_by), 30)
+                m = parser(resp)
+                if m is not None:
+                    return m, method, errs
+                errs.append(f"{group_by}: неизвестный формат")
+            except Exception as e:
+                errs.append(f"{group_by}: {e}")
+        return None, None, errs
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futs = [(a, pool.submit(load, a, lid)) for a, lid in targets]
+    for a, f in futs:
+        moments, method, errs = f.result()
+        if moments is None:
+            res["errors"].append(f"{a['name']}: " + "; ".join(errs))
+            continue
+        res["method"] = method
+        for dt, net, orders in moments:
+            sd, sname = _shift_of(dt, cfg)
+            if sd < start or sd > end:
+                continue
+            b = buckets.setdefault((sd.isoformat(), sname), {"date": sd.isoformat(), "shift": sname, "net": 0.0, "orders": 0.0, "by_point": {}})
+            b["net"] += net
+            b["orders"] += orders
+            b["by_point"][a["name"]] = b["by_point"].get(a["name"], 0) + net
+    order = {s["name"]: i for i, s in enumerate(cfg)}
+    rows = sorted(buckets.values(), key=lambda b: (b["date"], order.get(b["shift"], 9)), reverse=True)
+    res["rows"] = rows
+    res["totals"] = {s["name"]: {"net": sum(b["net"] for b in rows if b["shift"] == s["name"]),
+                                 "orders": sum(b["orders"] for b in rows if b["shift"] == s["name"]),
+                                 "count": sum(1 for b in rows if b["shift"] == s["name"])} for s in cfg}
+    seen = {p for b in rows for p in b["by_point"]}
+    res["points"] = [a["name"] for a, _ in targets if a["name"] in seen] if len(targets) > 1 else []
+    try:
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo(os.getenv("APP_TZ", "Asia/Almaty"))).replace(tzinfo=None)
+    except Exception:
+        now = datetime.utcnow() + timedelta(hours=5)
+    cd, cs = _shift_of(now, cfg)
+    res["current"] = {"date": cd.isoformat(), "shift": cs}
+    return res

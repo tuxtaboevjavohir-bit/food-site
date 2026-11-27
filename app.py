@@ -185,6 +185,14 @@ def get_sales(period: str = "week", loc: str = "all"):
         raise HTTPException(502, str(e))
 
 
+@app.get("/api/shifts")
+def get_shifts(period: str = "week", loc: str = "all"):
+    try:
+        return paloma.shift_report(period, loc)
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+
 @app.get("/api/locations")
 def get_locations():
     try:
