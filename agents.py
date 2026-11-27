@@ -7,6 +7,7 @@ import re
 import time
 
 import memory
+import paloma
 
 MODEL = os.getenv("FOODHOUSE_MODEL", "claude-sonnet-5-5")
 
@@ -81,6 +82,15 @@ AGENTS = {
 SPECIALISTS = ["marketer", "financier", "accountant", "chef", "smm", "hr", "buyer"]
 
 
+def lang_rule(lang: str) -> str:
+    if lang == "kk":
+        return (
+            "\n\nТІЛ: Барлық жауапты тек қазақ тілінде жаз (кириллица). "
+            "ЯЗЫК: отвечай только на казахском языке."
+        )
+    return "\n\nЯЗЫК: отвечай на том языке, на котором написана задача владельца (русский или казахский)."
+
+
 def _client():
     key = os.getenv("ANTHROPIC_API_KEY")
     if not key:
@@ -126,9 +136,9 @@ def _extract_json(text: str):
 
 
 # ------------------------------------------------------------------ задачи
-def run_task(task: str):
+def run_task(task: str, lang: str = "ru"):
     """Генератор событий для анимации: каждое событие — dict."""
-    ctx = memory.memory_context()
+    ctx = memory.memory_context() + paloma.context_for_agents() + lang_rule(lang)
     yield {"type": "status", "agent": "director", "state": "thinking", "text": "Читаю задачу…"}
 
     # 1. Директор планирует
@@ -142,7 +152,8 @@ def run_task(task: str):
             f"Задача от владельца: «{task}»\n\n"
             f"Реши, кому поручить. Доступны: {team}. "
             "Выбери только нужных (1–3). Ответь строго JSON без пояснений:\n"
-            '{"comment": "одна фраза от директора", "assignments": [{"agent": "marketer", "task": "что сделать"}]}'
+            '{"comment": "одна фраза от директора", "assignments": [{"agent": "marketer", "task": "что сделать"}]}\n'
+            "Поля comment и task пиши на языке ответа (см. правило ЯЗЫК)."
         )
         try:
             plan = _extract_json(_ask(system, prompt, 800))
@@ -194,14 +205,14 @@ def run_task(task: str):
 
 # ------------------------------------------------------------------ меню по фото
 MENU_PROMPT = (
-    "На фото меню заведения. Распознай все позиции. Ответь строго JSON-массивом без пояснений:\n"
+    "На фото или в PDF — меню заведения. Распознай все позиции. Ответь строго JSON-массивом без пояснений:\n"
     '[{"category": "Пицца", "name": "Маргарита", "price": 2500, "description": "состав, если указан"}]\n'
     "Цену пиши числом в тенге без символов; если цены нет — null. Категорию бери из заголовков меню."
 )
 
 
 def recognize_menu(images: list[tuple[bytes, str]]) -> list[dict]:
-    """images — список (байты, mime-тип). Возвращает позиции меню."""
+    """images — список (байты, mime-тип): фото или PDF. Возвращает позиции меню."""
     if demo_mode():
         time.sleep(1)
         return [
@@ -211,13 +222,15 @@ def recognize_menu(images: list[tuple[bytes, str]]) -> list[dict]:
         ]
     items = []
     for data, mime in images:
-        if mime not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
-            mime = "image/jpeg"
-        content = [
-            {"type": "image", "source": {"type": "base64", "media_type": mime, "data": base64.b64encode(data).decode()}},
-            {"type": "text", "text": MENU_PROMPT},
-        ]
-        text = _ask("Ты точно распознаёшь меню кафе с фотографий.", content, 4000)
+        b64 = base64.b64encode(data).decode()
+        if mime == "application/pdf" or data[:5] == b"%PDF-":
+            block = {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}}
+        else:
+            if mime not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+                mime = "image/jpeg"
+            block = {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}}
+        content = [block, {"type": "text", "text": MENU_PROMPT}]
+        text = _ask("Ты точно распознаёшь меню кафе с фотографий и PDF-файлов.", content, 8000)
         parsed = _extract_json(text)
         if isinstance(parsed, dict):
             parsed = parsed.get("items", [])

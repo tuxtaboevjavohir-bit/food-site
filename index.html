@@ -144,18 +144,46 @@
   .md strong{color:#ffd29b}
   .copy{float:right;background:none;border:1px solid var(--line);color:var(--mute);border-radius:7px;padding:3px 9px;font-size:12px;cursor:pointer}
   .copy:hover{color:var(--txt);border-color:var(--acc)}
+  .lang{display:inline-flex;margin-left:8px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .lang button{border:0!important;border-radius:0!important;padding:7px 10px!important}
+  .lang button.on{background:#ffd29b;color:#1b1410}
+  nav{flex-wrap:wrap}
+  select{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px}
+  .switch{display:flex;align-items:center;gap:6px;color:var(--mute);cursor:pointer}
+  .wa{display:grid;grid-template-columns:280px 1fr;gap:12px;min-height:420px}
+  .wa-list,.wa-chat{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .wa-list{overflow-y:auto;max-height:560px}
+  .wa-item{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+  .wa-item:hover,.wa-item.on{background:#33251c}
+  .wa-item b{display:block;font-size:14px}.wa-item small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-chat{display:flex;flex-direction:column}
+  .wa-msgs{flex:1;padding:14px;overflow-y:auto;max-height:480px;display:flex;flex-direction:column;gap:8px}
+  .msg{max-width:75%;padding:8px 11px;border-radius:12px;font-size:14px;line-height:1.4;white-space:pre-wrap}
+  .msg.in{background:#33251c;align-self:flex-start;border-bottom-left-radius:3px}
+  .msg.out{background:#1f5c3a;align-self:flex-end;border-bottom-right-radius:3px}
+  .msg small{display:block;font-size:11px;opacity:.7;margin-top:3px}
+  .bars{display:flex;align-items:flex-end;gap:3px;height:180px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .bar{flex:1;background:var(--acc);border-radius:3px 3px 0 0;min-width:4px;position:relative}
+  .bar:hover::after{content:attr(data-t);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#000;color:#fff;font-size:11px;padding:3px 6px;border-radius:5px;white-space:nowrap}
+  .kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:160px}
+  .kpi b{display:block;font-size:22px;color:#ffd29b}
+  @media (max-width:760px){.wa{grid-template-columns:1fr}}
 </style>
 
 </head>
 <body>
 <header>
-  <h1>🍔 Food <span>house</span> · штаб агентов</h1>
+  <h1>🍔 Food <span>house</span> · <b data-i18n="title">штаб агентов</b></h1>
   <span id="mode" class="badge">…</span>
   <nav>
-    <button data-tab="hq" class="on">Штаб</button>
-    <button data-tab="menu">Меню</button>
-    <button data-tab="mem">Память</button>
-    <button data-tab="hist">История</button>
+    <button data-tab="hq" class="on" data-i18n="tab_hq">Штаб</button>
+    <button data-tab="sales" data-i18n="tab_sales">Продажи</button>
+    <button data-tab="wa">WhatsApp</button>
+    <button data-tab="menu" data-i18n="tab_menu">Меню</button>
+    <button data-tab="mem" data-i18n="tab_mem">Память</button>
+    <button data-tab="hist" data-i18n="tab_hist">История</button>
+    <span class="lang"><button data-lang="ru">РУС</button><button data-lang="kk">ҚАЗ</button></span>
   </nav>
 </header>
 
@@ -164,38 +192,65 @@
   <section id="hq" class="tab on">
     <div id="office"><div id="floor"></div></div>
     <div class="taskbox">
-      <textarea id="taskText" rows="2" placeholder="Задача для команды, например: придумай новое блюдо, посчитай себестоимость и сними про него видео для TikTok"></textarea>
-      <button id="sendBtn" class="main">Поручить</button>
+      <textarea id="taskText" rows="2" data-i18n-ph="task_ph" placeholder="Задача для команды"></textarea>
+      <button id="sendBtn" class="main" data-i18n="send">Поручить</button>
     </div>
-    <div class="chips">
-      <span class="chip">Придумай акцию на выходные и посчитай, окупится ли она</span>
-      <span class="chip">Напиши 3 поста для TikTok про наше меню</span>
-      <span class="chip">Посчитай наценку на позиции меню и предложи новые цены</span>
-      <span class="chip">Какие расходы и документы нужно учитывать каждый месяц?</span>
-      <span class="chip">Составь техкарту и себестоимость нового бургера</span>
-      <span class="chip">Сделай контент-план для TikTok на неделю</span>
-      <span class="chip">Составь график смен на неделю для 6 сотрудников</span>
-      <span class="chip">Составь список закупок на неделю по нашему меню</span>
-    </div>
+    <div class="chips" id="chips"></div>
     <div id="results"></div>
+  </section>
+
+  <!-- ПРОДАЖИ -->
+  <section id="sales" class="tab">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:14px">
+      <h2 style="margin:0" data-i18n="sales_h">Продажи из Paloma365</h2>
+      <div class="row">
+        <select id="salesDays"><option value="7">7</option><option value="30" selected>30</option><option value="92">92</option></select>
+        <small data-i18n="days">дней</small>
+        <button class="main" id="salesBtn" style="padding:8px 16px" data-i18n="refresh">Обновить</button>
+      </div>
+    </div>
+    <div id="salesBox"></div>
+  </section>
+
+  <!-- WHATSAPP -->
+  <section id="wa" class="tab">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:14px">
+      <h2 style="margin:0" data-i18n="wa_h">Переписка с гостями</h2>
+      <div class="row" style="flex-wrap:wrap">
+        <label class="switch"><input type="checkbox" id="waAuto"> <span data-i18n="wa_auto">Автоответ ИИ</span></label>
+        <button class="main" id="waIdeasBtn" style="padding:8px 16px" data-i18n="wa_ideas">💡 Идеи из переписки</button>
+      </div>
+    </div>
+    <div id="waSetup"></div>
+    <div id="waIdeas"></div>
+    <div class="wa">
+      <div class="wa-list" id="waList"></div>
+      <div class="wa-chat">
+        <div class="wa-msgs" id="waMsgs"><small data-i18n="wa_pick">Выберите чат слева</small></div>
+        <div class="taskbox" style="margin:0;padding:10px">
+          <input type="text" id="waText" data-i18n-ph="wa_ph" placeholder="Ответ гостю…">
+          <button class="main" id="waSend" data-i18n="wa_send">Отправить</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- МЕНЮ -->
   <section id="menu" class="tab">
     <div id="drop" class="drop">
-      <div style="font-size:40px">📷</div>
-      <div>Перетащите сюда фото меню или выберите</div>
+      <div style="font-size:40px">📷 📄</div>
+      <div data-i18n="drop">Перетащите сюда фото или PDF меню, или выберите</div>
       <div class="btns">
-        <label>Из галереи<input id="gallery" type="file" accept="image/*" multiple hidden></label>
-        <label class="alt">Файлом<input id="fileIn" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></label>
-        <label class="alt">Камера<input id="camera" type="file" accept="image/*" capture="environment" hidden></label>
+        <label><span data-i18n="gallery">Из галереи</span><input id="gallery" type="file" accept="image/*,application/pdf" multiple hidden></label>
+        <label class="alt"><span data-i18n="file">Файлом (фото или PDF)</span><input id="fileIn" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" multiple hidden></label>
+        <label class="alt"><span data-i18n="camera">Камера</span><input id="camera" type="file" accept="image/*" capture="environment" hidden></label>
       </div>
       <div class="thumbs" id="thumbs"></div>
       <div class="row" style="justify-content:center;margin-top:14px;gap:16px">
-        <label style="background:none;color:var(--mute);font-weight:400;padding:0"><input type="radio" name="mode" value="replace" checked> заменить меню</label>
-        <label style="background:none;color:var(--mute);font-weight:400;padding:0"><input type="radio" name="mode" value="append"> добавить к меню</label>
+        <label style="background:none;color:var(--mute);font-weight:400;padding:0"><input type="radio" name="mode" value="replace" checked> <span data-i18n="replace">заменить меню</span></label>
+        <label style="background:none;color:var(--mute);font-weight:400;padding:0"><input type="radio" name="mode" value="append"> <span data-i18n="append">добавить к меню</span></label>
       </div>
-      <div style="margin-top:14px"><button id="recBtn" class="main" style="padding:10px 22px" disabled>Распознать меню</button></div>
+      <div style="margin-top:14px"><button id="recBtn" class="main" style="padding:10px 22px" disabled data-i18n="recognize">Распознать меню</button></div>
       <div id="recStatus" style="margin-top:10px"></div>
     </div>
     <table id="menuTable"></table>
@@ -203,10 +258,10 @@
 
   <!-- ПАМЯТЬ -->
   <section id="mem" class="tab">
-    <p><small>Эти факты читает каждый агент перед работой: адрес, часы работы, средний чек, поставщики, цели.</small></p>
+    <p><small data-i18n="mem_hint">Эти факты читает каждый агент перед работой: адрес, часы работы, средний чек, поставщики, цели.</small></p>
     <div class="taskbox">
-      <input type="text" id="factText" placeholder="Например: работаем с 10:00 до 23:00, средний чек 3000 ₸">
-      <button id="factBtn" class="main">Запомнить</button>
+      <input type="text" id="factText" data-i18n-ph="fact_ph" placeholder="">
+      <button id="factBtn" class="main" data-i18n="remember">Запомнить</button>
     </div>
     <div id="facts"></div>
   </section>
@@ -248,18 +303,232 @@ function md(text){
   flushP(); flushL();
   return out.join("");
 }
-function copyBtn(){ return `<button class="copy" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('.md').innerText);this.textContent='Скопировано ✓'">Копировать</button>`; }
+function copyBtn(){ return `<button class="copy" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('.md').innerText);this.textContent='${t("copied")}'">${t("copy")}</button>`; }
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let AG = {};
 
 // ---------- вкладки ----------
-document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
-  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button[data-tab]").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === b.dataset.tab));
   if (b.dataset.tab === "menu") loadMenu();
+  if (b.dataset.tab === "sales") loadSales();
+  if (b.dataset.tab === "wa") loadWA();
   if (b.dataset.tab === "mem") loadFacts();
   if (b.dataset.tab === "hist") loadHistory();
 });
+
+// ---------- языки: русский / қазақша ----------
+const I18N = {
+  ru: {
+    title:"штаб агентов", tab_hq:"Штаб", tab_sales:"Продажи", tab_menu:"Меню", tab_mem:"Память", tab_hist:"История",
+    task_ph:"Задача для команды, например: придумай новое блюдо, посчитай себестоимость и сними про него видео для TikTok",
+    send:"Поручить", sales_h:"Продажи из Paloma365", days:"дней", refresh:"Обновить",
+    wa_h:"Переписка с гостями", wa_auto:"Автоответ ИИ", wa_ideas:"💡 Идеи из переписки", wa_pick:"Выберите чат слева",
+    wa_ph:"Ответ гостю…", wa_send:"Отправить",
+    drop:"Перетащите сюда фото или PDF меню, или выберите", gallery:"Из галереи", file:"Файлом (фото или PDF)", camera:"Камера",
+    replace:"заменить меню", append:"добавить к меню", recognize:"Распознать меню",
+    mem_hint:"Эти факты читает каждый агент перед работой: адрес, часы работы, средний чек, поставщики, цели.",
+    fact_ph:"Например: работаем с 10:00 до 23:00, средний чек 3000 ₸", remember:"Запомнить",
+    copy:"Копировать", copied:"Скопировано ✓", summary:"Итог директора", task:"Задача", error:"Ошибка",
+    s_read:"Читаю задачу…", s_sum:"Свожу итог…", s_work:"Работаю: ", s_plan:"Распределяю задачи", s_wait:"Жду: ",
+    s_give:"Вот задача для тебя", s_take:"Понял, беру!", s_done:"Готово! Несу директору", s_thanks:"Отлично, спасибо!",
+    s_final:"Итог готов! Смотрите ниже 👇", s_board:"ЗАДАЧА", s_coffee:"☕ Кофе-брейк",
+    demo:"демо-режим: нет ключа API", model:"модель: ", db_tmp:" · данные временные", db_ok:" · база подключена",
+    m_cat:"Категория", m_dish:"Блюдо", m_desc:"Описание", m_price:"Цена", m_empty:"Меню пока не загружено.",
+    rec_wait:"⏳ Распознаю меню, это может занять до минуты…", rec_ok:"✅ Распознано позиций: ",
+    hist_empty:"Задач пока не было.", loading:"Загрузка…",
+    k_rev:"Выручка", k_avg:"В среднем за день", k_orders:"Заказов", k_days:"Дней с продажами",
+    t_daily:"Выручка по дням", tbl:"таблица", t_items:"Продажи по блюдам", t_week:"По дням недели",
+    sales_off:`<div class="card"><h3>Paloma365 не подключена</h3><div class="md"><ol>
+      <li>Войдите в кабинет Paloma365 (владельцем аккаунта).</li>
+      <li>Откройте «Подключённые приложения» → «Создать интеграцию».</li>
+      <li>Отметьте права <b>reports:read</b> и <b>catalog:read</b>, сохраните и скопируйте ключ (начинается с <code>ppik_</code>).</li>
+      <li>В Render → food-site → Environment добавьте <code>PALOMA_API_KEY</code> = ключ и нажмите «Save, rebuild and deploy».</li>
+    </ol>После этого здесь появятся продажи, а агенты будут учитывать их в ответах.</div></div>`,
+    wa_off:(url)=>`<div class="card"><h3>WhatsApp не подключён</h3><div class="md"><ol>
+      <li>На <b>developers.facebook.com</b> создайте приложение (тип Business) и добавьте продукт <b>WhatsApp</b>.</li>
+      <li>В разделе WhatsApp → API Setup подключите номер кафе и скопируйте <b>Phone number ID</b>.</li>
+      <li>В Meta Business → Системные пользователи создайте постоянный токен с правами <code>whatsapp_business_messaging</code>.</li>
+      <li>В Render → Environment добавьте: <code>WA_TOKEN</code>, <code>WA_PHONE_ID</code>, <code>WA_VERIFY_TOKEN</code> (любое слово), <code>WA_APP_SECRET</code> (App Secret из настроек приложения).</li>
+      <li>В Meta → WhatsApp → Configuration → Webhook укажите адрес <code>${url}</code> и то же слово из WA_VERIFY_TOKEN, подпишитесь на поле <b>messages</b>.</li>
+    </ol></div></div>`,
+    ideas_wait:"⏳ Маркетолог читает переписку…", ideas_h:"💡 Идеи из переписки с гостями",
+    you:"Гость", ai:"ИИ", manager:"менеджер",
+    chips:["Придумай акцию на выходные и посчитай, окупится ли она","Проанализируй продажи за месяц: что продаётся лучше и хуже",
+      "Напиши 3 поста для TikTok про наше меню","Посчитай наценку на позиции меню и предложи новые цены",
+      "Составь техкарту и себестоимость нового бургера","Сделай контент-план для TikTok на неделю",
+      "Составь график смен на неделю для 6 сотрудников","Составь список закупок на неделю по нашему меню"],
+    names:{}
+  },
+  kk: {
+    title:"агенттер штабы", tab_hq:"Штаб", tab_sales:"Сатылым", tab_menu:"Мәзір", tab_mem:"Жады", tab_hist:"Тарих",
+    task_ph:"Командаға тапсырма, мысалы: жаңа тағам ойлап тап, өзіндік құнын есепте және ол туралы TikTok-қа видео түсір",
+    send:"Тапсыру", sales_h:"Paloma365 сатылымдары", days:"күн", refresh:"Жаңарту",
+    wa_h:"Қонақтармен хат алмасу", wa_auto:"ЖИ автожауабы", wa_ideas:"💡 Хаттардан идеялар", wa_pick:"Сол жақтан чатты таңдаңыз",
+    wa_ph:"Қонаққа жауап…", wa_send:"Жіберу",
+    drop:"Мәзірдің фотосын немесе PDF файлын осында сүйреңіз немесе таңдаңыз", gallery:"Галереядан", file:"Файлмен (фото не PDF)", camera:"Камера",
+    replace:"мәзірді ауыстыру", append:"мәзірге қосу", recognize:"Мәзірді тану",
+    mem_hint:"Бұл деректерді әр агент жұмыс алдында оқиды: мекенжай, жұмыс уақыты, орташа чек, жеткізушілер, мақсаттар.",
+    fact_ph:"Мысалы: 10:00-ден 23:00-ге дейін жұмыс істейміз, орташа чек 3000 ₸", remember:"Есте сақтау",
+    copy:"Көшіру", copied:"Көшірілді ✓", summary:"Директордың қорытындысы", task:"Тапсырма", error:"Қате",
+    s_read:"Тапсырманы оқып жатырмын…", s_sum:"Қорытынды жасап жатырмын…", s_work:"Жұмыс істеп жатырмын: ", s_plan:"Тапсырмаларды бөлемін", s_wait:"Күтемін: ",
+    s_give:"Міне, саған тапсырма", s_take:"Түсіндім, аламын!", s_done:"Дайын! Директорға апарамын", s_thanks:"Керемет, рахмет!",
+    s_final:"Қорытынды дайын! Төменнен қараңыз 👇", s_board:"ТАПСЫРМА", s_coffee:"☕ Кофе-брейк",
+    demo:"демо-режим: API кілті жоқ", model:"модель: ", db_tmp:" · деректер уақытша", db_ok:" · база қосылған",
+    m_cat:"Санат", m_dish:"Тағам", m_desc:"Сипаттама", m_price:"Баға", m_empty:"Мәзір әлі жүктелмеген.",
+    rec_wait:"⏳ Мәзірді танып жатырмын, бір минутқа дейін созылуы мүмкін…", rec_ok:"✅ Танылған позициялар: ",
+    hist_empty:"Әзірге тапсырма болған жоқ.", loading:"Жүктелуде…",
+    k_rev:"Түсім", k_avg:"Күніне орташа", k_orders:"Тапсырыстар", k_days:"Сатылым болған күндер",
+    t_daily:"Күндер бойынша түсім", tbl:"кесте", t_items:"Тағамдар бойынша сатылым", t_week:"Апта күндері бойынша",
+    sales_off:`<div class="card"><h3>Paloma365 қосылмаған</h3><div class="md"><ol>
+      <li>Paloma365 кабинетіне аккаунт иесі ретінде кіріңіз.</li>
+      <li>«Қосылған қосымшалар» → «Интеграция жасау» бөлімін ашыңыз.</li>
+      <li><b>reports:read</b> және <b>catalog:read</b> құқықтарын белгілеп, кілтті көшіріңіз (<code>ppik_</code> деп басталады).</li>
+      <li>Render → food-site → Environment бөліміне <code>PALOMA_API_KEY</code> = кілт қосып, «Save, rebuild and deploy» басыңыз.</li>
+    </ol>Осыдан кейін мұнда сатылымдар шығады, ал агенттер оларды жауаптарында ескереді.</div></div>`,
+    wa_off:(url)=>`<div class="card"><h3>WhatsApp қосылмаған</h3><div class="md"><ol>
+      <li><b>developers.facebook.com</b> сайтында Business түріндегі қосымша жасап, <b>WhatsApp</b> өнімін қосыңыз.</li>
+      <li>WhatsApp → API Setup бөлімінде кафе нөмірін қосып, <b>Phone number ID</b> көшіріңіз.</li>
+      <li>Meta Business → Жүйелік пайдаланушылар бөлімінде <code>whatsapp_business_messaging</code> құқығы бар тұрақты токен жасаңыз.</li>
+      <li>Render → Environment бөліміне қосыңыз: <code>WA_TOKEN</code>, <code>WA_PHONE_ID</code>, <code>WA_VERIFY_TOKEN</code> (кез келген сөз), <code>WA_APP_SECRET</code>.</li>
+      <li>Meta → WhatsApp → Configuration → Webhook бөлімінде <code>${url}</code> мекенжайын және WA_VERIFY_TOKEN сөзін енгізіп, <b>messages</b> өрісіне жазылыңыз.</li>
+    </ol></div></div>`,
+    ideas_wait:"⏳ Маркетолог хаттарды оқып жатыр…", ideas_h:"💡 Қонақтармен хат алмасудан идеялар",
+    you:"Қонақ", ai:"ЖИ", manager:"менеджер",
+    chips:["Демалыс күндерге акция ойлап тап және өзін ақтай ма, есепте","Айдағы сатылымды талда: не жақсы, не нашар сатылады",
+      "Мәзіріміз туралы TikTok-қа 3 пост жаз","Мәзір позицияларына үстеме бағаны есепте және жаңа бағалар ұсын",
+      "Жаңа бургердің техкартасы мен өзіндік құнын жаса","TikTok үшін бір аптаға контент-жоспар жаса",
+      "6 қызметкерге бір аптаға ауысым кестесін құр","Мәзір бойынша бір аптаға сатып алу тізімін жаса"],
+    names:{director:"Директор", marketer:"Маркетолог", financier:"Қаржыгер", accountant:"Бухгалтер",
+      chef:"Бас аспаз", smm:"SMM-маман", hr:"HR-менеджер", buyer:"Сатып алушы"}
+  }
+};
+let LANG = "ru";
+try { LANG = localStorage.getItem("fh_lang") === "kk" ? "kk" : "ru"; } catch {}
+const t = k => I18N[LANG][k] ?? I18N.ru[k] ?? k;
+const NAME = k => I18N[LANG].names[k] || AG[k]?.name || k;
+let INFO = null;
+function applyLang(){
+  document.documentElement.lang = LANG === "kk" ? "kk" : "ru";
+  document.querySelectorAll("[data-i18n]").forEach(e => e.textContent = t(e.dataset.i18n));
+  document.querySelectorAll("[data-i18n-ph]").forEach(e => e.placeholder = t(e.dataset.i18nPh));
+  document.querySelectorAll("[data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === LANG));
+  $("#chips").innerHTML = t("chips").map(c => `<span class="chip">${esc(c)}</span>`).join("");
+    document.querySelectorAll("[data-name-k]").forEach(e => e.textContent = (e.dataset.emoji || "") + NAME(e.dataset.nameK));
+  if (INFO) setBadge();
+  const on = document.querySelector("nav button.on[data-tab]")?.dataset.tab;
+  if (on === "menu") loadMenu(); if (on === "hist") loadHistory(); if (on === "sales") loadSales(); if (on === "wa") loadWA();
+}
+document.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
+  LANG = b.dataset.lang; try { localStorage.setItem("fh_lang", LANG); } catch {} applyLang();
+});
+function setBadge(){
+  $("#mode").textContent = (INFO.demo ? t("demo") : t("model") + INFO.model) + (INFO.db === "sqlite" ? t("db_tmp") : t("db_ok"));
+  $("#mode").classList.toggle("demo", !!INFO.demo);
+}
+
+// ---------- продажи ----------
+function findRows(o, depth=0){
+  if (depth > 4 || o == null) return null;
+  if (Array.isArray(o)) return o.length && typeof o[0] === "object" ? o : null;
+  if (typeof o === "object") {
+    for (const k of ["data","rows","days","groups","items","results"]) { const r = findRows(o[k], depth+1); if (r) return r; }
+    for (const v of Object.values(o)) { const r = findRows(v, depth+1); if (r) return r; }
+  }
+  return null;
+}
+function flat(row){
+  const out = {};
+  for (const [k, v] of Object.entries(row || {})) {
+    if (v && typeof v === "object" && !Array.isArray(v)) for (const [k2, v2] of Object.entries(v)) out[k + "." + k2] = (v2 && typeof v2 === "object") ? JSON.stringify(v2) : v2;
+    else out[k] = Array.isArray(v) ? JSON.stringify(v).slice(0, 80) : v;
+  }
+  return out;
+}
+const num = v => { const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return isFinite(n) ? n : null; };
+const fmt = n => n == null ? "—" : Math.round(n).toLocaleString("ru-RU");
+function table(rows, max=60){
+  const fr = rows.slice(0, max).map(flat), cols = [...new Set(fr.flatMap(r => Object.keys(r)))].slice(0, 12);
+  return `<div class="md"><table><tr>${cols.map(c => `<th>${esc(c)}</th>`).join("")}</tr>${fr.map(r => `<tr>${cols.map(c => `<td>${esc(r[c] ?? "")}</td>`).join("")}</tr>`).join("")}</table></div>`;
+}
+const pickKey = (keys, re, row) => keys.find(k => re.test(k) && num(row[k]) != null);
+async function loadSales(){
+  const box = $("#salesBox"); box.innerHTML = `<small>${t("loading")}</small>`;
+  let d;
+  try { const r = await fetch("/api/sales?days=" + $("#salesDays").value); d = await r.json(); if (!r.ok) throw new Error(d.detail); }
+  catch (e) { box.innerHTML = `<div class="card err">${t("error")}: ${esc(e.message)}</div>`; return; }
+  if (!d.connected) { box.innerHTML = t("sales_off"); return; }
+  let html = "";
+  const daily = findRows(d.daily);
+  if (daily) {
+    const fr = daily.map(flat), keys = Object.keys(fr[0] || {});
+    const dk = keys.find(k => /date|day/i.test(k)), vk = pickKey(keys, /net|revenue|total|sum|amount|sales/i, fr[0]), ok = pickKey(keys, /order|receipt|check|count/i, fr[0]);
+    if (vk) {
+      const vals = fr.map(r => num(r[vk]) || 0), max = Math.max(...vals, 1), sum = vals.reduce((a, b) => a + b, 0);
+      const orders = ok ? fr.reduce((a, r) => a + (num(r[ok]) || 0), 0) : null, active = vals.filter(v => v > 0).length;
+      html += `<div class="kpis"><div class="kpi"><small>${t("k_rev")}</small><b>${fmt(sum)} ₸</b></div>
+        <div class="kpi"><small>${t("k_avg")}</small><b>${fmt(active ? sum / active : 0)} ₸</b></div>
+        ${orders != null ? `<div class="kpi"><small>${t("k_orders")}</small><b>${fmt(orders)}</b></div>` : ""}
+        <div class="kpi"><small>${t("k_days")}</small><b>${active}</b></div></div>
+        <div class="card"><h3>${t("t_daily")}</h3><div class="bars">${fr.map((r, i) => `<div class="bar" style="height:${Math.max(2, vals[i] / max * 100)}%" data-t="${esc(dk ? r[dk] : i + 1)}: ${fmt(vals[i])} ₸"></div>`).join("")}</div></div>`;
+    }
+    html += `<details class="card"><summary>${t("t_daily")} — ${t("tbl")}</summary>${table(daily, 100)}</details>`;
+  }
+  const items = findRows(d.by_item); if (items) html += `<div class="card"><h3>${t("t_items")}</h3>${table(items, 40)}</div>`;
+  const week = findRows(d.by_weekday); if (week) html += `<div class="card"><h3>${t("t_week")}</h3>${table(week, 7)}</div>`;
+  if (d.errors?.length) html += `<div class="card err">${d.errors.map(esc).join("<br>")}</div>`;
+  if (!html) html = `<div class="card"><pre style="white-space:pre-wrap">${esc(JSON.stringify(d, null, 2)).slice(0, 5000)}</pre></div>`;
+  box.innerHTML = html;
+}
+$("#salesBtn").onclick = loadSales; $("#salesDays").onchange = loadSales;
+
+// ---------- WhatsApp ----------
+let waPhone = null, waTimer = null;
+async function loadWA(){
+  let d; try { d = await (await fetch("/api/wa/chats")).json(); } catch { return; }
+  $("#waSetup").innerHTML = d.connected ? "" : t("wa_off")(location.origin + "/webhook/whatsapp");
+  $("#waAuto").checked = d.autoreply;
+  $("#waList").innerHTML = d.chats.map(c => `<div class="wa-item ${c.phone === waPhone ? "on" : ""}" data-p="${esc(c.phone)}">
+    <b>${esc(c.name || "+" + c.phone)}</b><small>${esc(c.last || "")}</small><small>${esc((c.time || "").replace("T", " ").slice(0, 16))}</small></div>`).join("")
+    || `<div class="wa-item"><small>—</small></div>`;
+  document.querySelectorAll(".wa-item[data-p]").forEach(e => e.onclick = () => openChat(e.dataset.p));
+  if (waPhone) openChat(waPhone, true);
+  clearTimeout(waTimer);
+  if (document.querySelector("nav button.on[data-tab]")?.dataset.tab === "wa") waTimer = setTimeout(loadWA, 8000);
+}
+async function openChat(phone, quiet){
+  waPhone = phone;
+  document.querySelectorAll(".wa-item").forEach(e => e.classList.toggle("on", e.dataset.p === phone));
+  renderMsgs(await (await fetch("/api/wa/history?phone=" + encodeURIComponent(phone))).json(), quiet);
+}
+function renderMsgs(list, quiet){
+  const box = $("#waMsgs"), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+  box.innerHTML = list.map(m => `<div class="msg ${m.direction}">${esc(m.text)}<small>${m.direction === "in" ? t("you") : esc(m.author === "ИИ" ? t("ai") : m.author === "менеджер" ? t("manager") : m.author || "")} · ${esc((m.created || "").slice(11, 16))}</small></div>`).join("");
+  if (!quiet || atBottom) box.scrollTop = box.scrollHeight;
+}
+async function waSend(){
+  const text = $("#waText").value.trim(); if (!text || !waPhone) return;
+  $("#waSend").disabled = true;
+  try {
+    const r = await fetch("/api/wa/reply", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({phone: waPhone, text})});
+    const d = await r.json(); if (!r.ok) throw new Error(d.detail);
+    $("#waText").value = ""; renderMsgs(d);
+  } catch (e) { alertBox(e.message); }
+  $("#waSend").disabled = false;
+}
+function alertBox(msg){ $("#waIdeas").innerHTML = `<div class="card err">${t("error")}: ${esc(msg)}</div>`; }
+$("#waSend").onclick = waSend;
+$("#waText").addEventListener("keydown", e => { if (e.key === "Enter") waSend(); });
+$("#waAuto").onchange = e => fetch("/api/wa/autoreply", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({on: e.target.checked})});
+$("#waIdeasBtn").onclick = async () => {
+  $("#waIdeasBtn").disabled = true; $("#waIdeas").innerHTML = `<div class="card"><small>${t("ideas_wait")}</small></div>`;
+  try {
+    const r = await fetch("/api/wa/ideas?lang=" + LANG, {method:"POST"}); const d = await r.json(); if (!r.ok) throw new Error(d.detail);
+    $("#waIdeas").innerHTML = `<div class="card summary">${copyBtn()}<h3>${t("ideas_h")}</h3><div class="md">${md(d.text)}</div></div>`;
+  } catch (e) { alertBox(e.message); }
+  $("#waIdeasBtn").disabled = false;
+};
 
 // ---------- офис и анимация ----------
 const W = 1200, H = 720, SPEED = 165;
@@ -308,7 +577,8 @@ function buildOffice(){
   f.appendChild(el("corridor", {}));
   for (const [k, r] of Object.entries(ROOMS)) {
     const room = el("room", {left:r.x+"px", top:r.y+"px", width:r.w+"px", height:r.h+"px", background:r.floor});
-    room.appendChild(el("plate", {}, `${AG[k]?.emoji||""} ${esc(AG[k]?.name||k)}`));
+    const pl = el("plate", {}, ""); pl.dataset.nameK = k; pl.dataset.emoji = (AG[k]?.emoji || "") + " "; pl.textContent = pl.dataset.emoji + NAME(k);
+    room.appendChild(pl);
     f.appendChild(room);
     const cx = r.x + r.w/2;
     if (r.door === "b") f.appendChild(el("door b", {left:(cx-32)+"px", top:(r.y+r.h-5)+"px", width:"64px", height:"5px"}));
@@ -344,7 +614,7 @@ function buildOffice(){
     const p = el("person", {"--shirt":L.shirt, "--pants":L.pants, "--hair":L.hair, "--skin":L.skin});
     p.style.setProperty("--shirt", L.shirt); p.style.setProperty("--pants", L.pants);
     p.style.setProperty("--hair", L.hair); p.style.setProperty("--skin", L.skin);
-    p.innerHTML = `<div class="bubble"></div><div class="tag">${esc(AG[k]?.name||k)}</div>
+    p.innerHTML = `<div class="bubble"></div><div class="tag" data-name-k="${k}">${esc(NAME(k))}</div>
       <div class="pi"><div class="pb">
         <div class="arm b"></div><div class="leg b"></div><div class="torso"></div><div class="leg f"></div>
         <div class="head"><div class="hair"></div><div class="eye"></div></div><div class="arm f"></div><div class="carry">📁</div>
@@ -406,7 +676,7 @@ function coffeeTrip(p){
   p.trip = true;
   const go = [...doorPath(p.k), COFFEE];
   walk(p, go);
-  act(p, async () => { face(p, -1); say(p.k, "☕ Кофе-брейк", 2000); await sleep(2200); });
+  act(p, async () => { face(p, -1); say(p.k, t("s_coffee"), 2000); await sleep(2200); });
   walk(p, homeFrom(go, p.k));
   act(p, async () => { sitAt(p); p.trip = false; });
 }
@@ -421,20 +691,20 @@ async function handle(ev){
     case "status":
       if (!p) break;
       p.state = ev.state;
-      if (ev.state === "working") await act(p, async () => { sitAt(p); poses(p, "typing"); mon(p.k, true); say(p.k, "Работаю: " + ev.text, 3500); await sleep(400); });
-      else if (ev.state === "thinking") await act(p, async () => { poses(p, "thinking"); say(p.k, ev.text); await sleep(900); });
+      if (ev.state === "working") await act(p, async () => { sitAt(p); poses(p, "typing"); mon(p.k, true); say(p.k, t("s_work") + ev.text, 3500); await sleep(400); });
+      else if (ev.state === "thinking") await act(p, async () => { poses(p, "thinking"); say(p.k, /итог/i.test(ev.text) ? t("s_sum") : t("s_read")); await sleep(900); });
       else await act(p, async () => { poses(p); mon(p.k, false); });
       break;
     case "plan": {
-      const names = ev.assignments.map(a => AG[a.agent]?.name || a.agent);
+      const names = ev.assignments.map(a => NAME(a.agent));
       await walk(D, [[1060, 330], BOARD]);
       await act(D, async () => {
         face(D, 1); poses(D, "writing");
-        document.querySelector(".board").innerHTML = "<b>ЗАДАЧА</b><br>" + names.map(n => "→ " + esc(n)).join("<br>");
-        say("director", ev.text || "Распределяю задачи", 3000); await sleep(2200); poses(D);
+        document.querySelector(".board").innerHTML = "<b>" + t("s_board") + "</b><br>" + names.map(n => "→ " + esc(n)).join("<br>");
+        say("director", ev.text || t("s_plan"), 3000); await sleep(2200); poses(D);
       });
       await walk(D, [[1060, 330], [seatOf("director").x, seatOf("director").y]]);
-      await act(D, async () => { sitAt(D); say("director", "Жду: " + names.join(", "), 2500); });
+      await act(D, async () => { sitAt(D); say("director", t("s_wait") + names.join(", "), 2500); });
       break;
     }
     case "move": {
@@ -442,8 +712,8 @@ async function handle(ev){
       await act(p, async () => { poses(p); mon(p.k, false); });
       await walk(p, go);
       await act(p, async () => {
-        face(p, 1); poses(D, "giving"); say("director", "Вот задача для тебя", 2000); await sleep(1100);
-        poses(D); p.el.classList.add("carrying"); say(p.k, "Понял, беру!", 1500); await sleep(700);
+        face(p, 1); poses(D, "giving"); say("director", t("s_give"), 2000); await sleep(1100);
+        poses(D); p.el.classList.add("carrying"); say(p.k, t("s_take"), 1500); await sleep(700);
       });
       await walk(p, homeFrom(go, ev.agent));
       await act(p, async () => { p.el.classList.remove("carrying"); sitAt(p); });
@@ -451,25 +721,25 @@ async function handle(ev){
     }
     case "result": {
       const go = toDirector(ev.agent);
-      await act(p, async () => { poses(p, "stretch"); mon(p.k, false); say(p.k, "Готово! Несу директору", 1500); await sleep(800); p.el.classList.add("carrying"); });
+      await act(p, async () => { poses(p, "stretch"); mon(p.k, false); say(p.k, t("s_done"), 1500); await sleep(800); p.el.classList.add("carrying"); });
       await walk(p, go);
       await act(p, async () => {
         face(p, 1); poses(p, "giving"); await sleep(700);
         p.el.classList.remove("carrying"); poses(p); deskPapers.textContent += "📄";
-        say("director", "Отлично, спасибо!", 1800); await sleep(800);
+        say("director", t("s_thanks"), 1800); await sleep(800);
       });
-      R.insertAdjacentHTML("beforeend", `<div class="card"><h3>${AG[ev.agent].emoji} ${esc(AG[ev.agent].name)}</h3>
-        ${copyBtn()}<div class="task">Задача: ${esc(ev.task)}</div><div class="md">${md(ev.text)}</div></div>`);
+      R.insertAdjacentHTML("beforeend", `<div class="card"><h3>${AG[ev.agent].emoji} ${esc(NAME(ev.agent))}</h3>
+        ${copyBtn()}<div class="task">${t("task")}: ${esc(ev.task)}</div><div class="md">${md(ev.text)}</div></div>`);
       walk(p, homeFrom(go, ev.agent));
       act(p, async () => sitAt(p));
       break;
     }
     case "summary":
-      await act(D, async () => { D.el.classList.remove("sitting"); poses(D, "waving"); deskPapers.textContent = ""; say("director", "Итог готов! Смотрите ниже 👇", 3500); await sleep(1800); poses(D); sitAt(D); });
-      R.insertAdjacentHTML("afterbegin", `<div class="card summary">${copyBtn()}<h3>👔 Итог директора</h3><div class="md">${md(ev.text)}</div></div>`);
+      await act(D, async () => { D.el.classList.remove("sitting"); poses(D, "waving"); deskPapers.textContent = ""; say("director", t("s_final"), 3500); await sleep(1800); poses(D); sitAt(D); });
+      R.insertAdjacentHTML("afterbegin", `<div class="card summary">${copyBtn()}<h3>👔 ${t("summary")}</h3><div class="md">${md(ev.text)}</div></div>`);
       break;
     case "error":
-      R.insertAdjacentHTML("afterbegin", `<div class="card err">Ошибка: ${esc(ev.text)}</div>`);
+      R.insertAdjacentHTML("afterbegin", `<div class="card err">${t("error")}: ${esc(ev.text)}</div>`);
       Object.values(P).forEach(x => { x.state = "idle"; poses(x); mon(x.k, false); });
       break;
   }
@@ -480,7 +750,7 @@ async function sendTask(){
   const text = $("#taskText").value.trim(); if (!text || busy) return;
   busy = true; $("#sendBtn").disabled = true; $("#results").innerHTML = "";
   try {
-    const res = await fetch("/api/task", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text})});
+    const res = await fetch("/api/task", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text, lang: LANG})});
     if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
     while (true) {
@@ -496,13 +766,15 @@ async function sendTask(){
 }
 $("#sendBtn").onclick = sendTask;
 $("#taskText").addEventListener("keydown", e => { if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); sendTask(); }});
-document.querySelectorAll(".chip").forEach(c => c.onclick = () => { $("#taskText").value = c.textContent; $("#taskText").focus(); });
 
 // ---------- меню ----------
 let picked = [];
 function pick(files){
-  picked = [...picked, ...[...files].filter(f => f.type.startsWith("image/"))];
-  $("#thumbs").innerHTML = picked.map(f => `<img src="${URL.createObjectURL(f)}">`).join("");
+  const isPdf = f => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+  picked = [...picked, ...[...files].filter(f => f.type.startsWith("image/") || isPdf(f))];
+  $("#thumbs").innerHTML = picked.map(f => isPdf(f)
+    ? `<div style="width:90px;height:90px;border-radius:8px;background:#33251c;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;padding:4px;text-align:center;overflow:hidden"><span style="font-size:30px">📄</span>${esc(f.name.slice(0, 24))}</div>`
+    : `<img src="${URL.createObjectURL(f)}">`).join("");
   $("#recBtn").disabled = !picked.length;
 }
 ["#gallery","#fileIn","#camera"].forEach(s => $(s).onchange = e => pick(e.target.files));
@@ -511,30 +783,31 @@ drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
 drop.ondragleave = () => drop.classList.remove("over");
 drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); pick(e.dataTransfer.files); };
 
-async function shrink(file){ // уменьшаем фото до 2000px, чтобы быстро отправлялось
+async function shrink(file){ // уменьшаем фото до 2000px, чтобы быстро отправлялось; PDF отправляем как есть
+  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return file;
   const img = await createImageBitmap(file); const k = Math.min(1, 2000/Math.max(img.width,img.height));
   const c = document.createElement("canvas"); c.width = img.width*k; c.height = img.height*k;
   c.getContext("2d").drawImage(img,0,0,c.width,c.height);
   return new Promise(r => c.toBlob(b => r(new File([b], file.name.replace(/\.\w+$/,"")+".jpg", {type:"image/jpeg"})), "image/jpeg", .88));
 }
 $("#recBtn").onclick = async () => {
-  $("#recBtn").disabled = true; $("#recStatus").textContent = "⏳ Распознаю меню, это может занять до минуты…";
+  $("#recBtn").disabled = true; $("#recStatus").textContent = t("rec_wait");
   const fd = new FormData();
   for (const f of picked) fd.append("files", await shrink(f));
   fd.append("mode", document.querySelector("input[name=mode]:checked").value);
   try {
     const r = await fetch("/api/menu/upload", {method:"POST", body:fd}); const d = await r.json();
     if (!r.ok) throw new Error(d.detail);
-    $("#recStatus").textContent = `✅ Распознано позиций: ${d.recognized}`;
+    $("#recStatus").textContent = t("rec_ok") + d.recognized;
     picked = []; $("#thumbs").innerHTML = ""; renderMenu(d.menu);
   } catch(e){ $("#recStatus").innerHTML = `<span class="err">${esc(e.message)}</span>`; $("#recBtn").disabled = false; }
 };
 async function loadMenu(){ renderMenu(await (await fetch("/api/menu")).json()); }
 function renderMenu(m){
-  $("#menuTable").innerHTML = m.length ? `<tr><th>Категория</th><th>Блюдо</th><th>Описание</th><th style="text-align:right">Цена</th></tr>` +
+  $("#menuTable").innerHTML = m.length ? `<tr><th>${t("m_cat")}</th><th>${t("m_dish")}</th><th>${t("m_desc")}</th><th style="text-align:right">${t("m_price")}</th></tr>` +
     m.map(i => `<tr><td>${esc(i.category)}</td><td>${esc(i.name)}</td><td><small>${esc(i.description)}</small></td>
       <td class="price">${i.price!=null ? Math.round(i.price).toLocaleString("ru-RU")+" ₸" : "—"}</td></tr>`).join("")
-    : `<tr><td><small>Меню пока не загружено.</small></td></tr>`;
+    : `<tr><td><small>${t("m_empty")}</small></td></tr>`;
 }
 
 // ---------- память ----------
@@ -554,16 +827,16 @@ $("#factBtn").onclick = async () => {
 async function loadHistory(){
   const h = await (await fetch("/api/history")).json();
   $("#history").innerHTML = h.length ? h.map(t => `<div class="card"><h3>${esc(t.text)}</h3><div class="task">${esc(t.created.replace("T"," "))}</div>
-    <div class="md">${md(t.result.summary || "")}</div></div>`).join("") : "<small>Задач пока не было.</small>";
+    <div class="md">${md(t.result.summary || "")}</div></div>`).join("") : `<small>${t("hist_empty")}</small>`;
 }
 
 // ---------- старт ----------
 (async () => {
   const r = await fetch("/api/info"); if (r.status === 401) { location.href = "/login"; return; }
   const i = await r.json(); AG = i.agents;
-  $("#mode").textContent = (i.demo ? "демо-режим: нет ключа API" : "модель: " + i.model) + (i.db === "sqlite" ? " · данные временные" : " · база подключена");
+  INFO = i; setBadge();
   if (i.demo) $("#mode").classList.add("demo");
-  buildOffice();
+  buildOffice(); applyLang();
 })();
 </script>
 </body>

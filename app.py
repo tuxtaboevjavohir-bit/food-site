@@ -8,19 +8,74 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile  # noqa: E402
-from fastapi.responses import FileResponse, StreamingResponse  # noqa: E402
+import hashlib  # noqa: E402
+import hmac  # noqa: E402
+
+from fastapi import Request  # noqa: E402
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 import agents  # noqa: E402
 import memory  # noqa: E402
+import paloma  # noqa: E402
+import whatsapp  # noqa: E402
+from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
+# ---------- вход по паролю ----------
+PASSWORD = os.getenv("APP_PASSWORD", "").strip()
+TOKEN = hashlib.sha256(("foodhouse:" + PASSWORD).encode()).hexdigest() if PASSWORD else ""
+LOGIN_HTML = """<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Food house — вход</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:#1b1410;color:#f5ece4;font-family:system-ui,-apple-system,sans-serif}form{background:#261c16;border:1px solid #3a2b21;
+border-radius:16px;padding:32px;width:320px;text-align:center}h1{font-size:22px;margin:0 0 6px}h1 span{color:#ff8a2b}p{color:#b39f8f;margin:0 0 20px}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #3a2b21;background:#1b1410;color:#f5ece4;font-size:16px}
+button{margin-top:12px;width:100%;padding:12px;border:0;border-radius:10px;background:#ff8a2b;color:#1b1410;font-weight:700;font-size:16px;cursor:pointer}
+.err{color:#ff8f8f;margin-top:10px}</style></head><body><form method="post" action="/login">
+<h1>🍔 Food <span>house</span></h1><p>Штаб агентов</p><input type="password" name="password" placeholder="Пароль" autofocus>
+<button>Войти</button>%ERR%</form></body></html>"""
+
+
+@app.middleware("http")
+async def auth(request: Request, call_next):
+    if not PASSWORD or request.url.path == "/login" or request.url.path.startswith("/webhook/"):
+        return await call_next(request)
+    if hmac.compare_digest(request.cookies.get("fh_auth", ""), TOKEN):
+        return await call_next(request)
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"detail": "Нужно войти"}, status_code=401)
+    return RedirectResponse("/login", status_code=303)
+
+
+@app.get("/login")
+def login_page():
+    return HTMLResponse(LOGIN_HTML.replace("%ERR%", ""))
+
+
+@app.post("/login")
+def login(password: str = Form("")):
+    if PASSWORD and hmac.compare_digest(password.strip(), PASSWORD):
+        resp = RedirectResponse("/", status_code=303)
+        resp.set_cookie("fh_auth", TOKEN, max_age=60 * 60 * 24 * 30, httponly=True, samesite="lax")
+        return resp
+    return HTMLResponse(LOGIN_HTML.replace("%ERR%", '<div class="err">Неверный пароль</div>'), status_code=401)
+
 
 class TaskIn(BaseModel):
     text: str
+    lang: str = "ru"
+
+
+class ReplyIn(BaseModel):
+    phone: str
+    text: str
+
+
+class ToggleIn(BaseModel):
+    on: bool
 
 
 class FactIn(BaseModel):
@@ -36,6 +91,9 @@ def index():
 def info():
     return {
         "demo": agents.demo_mode(),
+        "db": "postgres" if memory.USE_PG else "sqlite",
+        "paloma": paloma.connected(),
+        "whatsapp": whatsapp.connected(),
         "model": agents.MODEL,
         "agents": {k: {"name": v["name"], "emoji": v["emoji"]} for k, v in agents.AGENTS.items()},
     }
@@ -48,7 +106,7 @@ def task(body: TaskIn):
 
     def stream():
         try:
-            for event in agents.run_task(body.text.strip()):
+            for event in agents.run_task(body.text.strip(), "kk" if body.lang == "kk" else "ru"):
                 yield json.dumps(event, ensure_ascii=False) + "\n"
         except Exception as e:  # ошибку показываем на странице
             yield json.dumps({"type": "error", "text": str(e)}, ensure_ascii=False) + "\n"
@@ -90,9 +148,11 @@ async def upload_menu(files: list[UploadFile] = File(...), mode: str = Form("rep
     images = []
     for f in files:
         data = await f.read()
-        if len(data) > 5 * 1024 * 1024:
-            raise HTTPException(400, f"Файл {f.filename} больше 5 МБ — уменьшите фото")
-        images.append((data, f.content_type or "image/jpeg"))
+        is_pdf = (f.content_type == "application/pdf") or data[:5] == b"%PDF-"
+        limit = 25 if is_pdf else 5
+        if len(data) > limit * 1024 * 1024:
+            raise HTTPException(400, f"Файл {f.filename} больше {limit} МБ")
+        images.append((data, "application/pdf" if is_pdf else (f.content_type or "image/jpeg")))
     try:
         items = agents.recognize_menu(images)
     except Exception as e:
@@ -102,6 +162,79 @@ async def upload_menu(files: list[UploadFile] = File(...), mode: str = Form("rep
     else:
         memory.replace_menu(items)
     return {"recognized": len(items), "menu": memory.list_menu()}
+
+
+# ---------- продажи Paloma365 ----------
+@app.get("/api/sales")
+def get_sales(days: int = 30):
+    try:
+        return paloma.sales(days)
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+
+@app.get("/api/sales/check")
+def check_sales():
+    return paloma.check()
+
+
+# ---------- WhatsApp ----------
+@app.get("/webhook/whatsapp")
+def wa_verify(request: Request):
+    q = request.query_params
+    token = whatsapp.cfg("WA_VERIFY_TOKEN")
+    if q.get("hub.mode") == "subscribe" and token and hmac.compare_digest(q.get("hub.verify_token", ""), token):
+        return HTMLResponse(q.get("hub.challenge", ""))
+    raise HTTPException(403, "verify token mismatch")
+
+
+@app.post("/webhook/whatsapp")
+async def wa_incoming(request: Request, background: BackgroundTasks):
+    body = await request.body()
+    if not whatsapp.verify_signature(body, request.headers.get("X-Hub-Signature-256", "")):
+        raise HTTPException(401, "bad signature")
+    try:
+        payload = json.loads(body or b"{}")
+    except ValueError:
+        raise HTTPException(400, "bad json")
+    background.add_task(whatsapp.handle_webhook, payload)
+    return {"ok": True}
+
+
+@app.get("/api/wa/chats")
+def wa_chats():
+    return {"connected": whatsapp.connected(), "autoreply": whatsapp.autoreply_on(), "chats": memory.wa_chats()}
+
+
+@app.get("/api/wa/history")
+def wa_history(phone: str):
+    return memory.wa_history(phone, 200)
+
+
+@app.post("/api/wa/reply")
+def wa_reply(body: ReplyIn):
+    if not body.text.strip():
+        raise HTTPException(400, "Пустое сообщение")
+    try:
+        whatsapp.send_text(body.phone, body.text.strip())
+    except Exception as e:
+        raise HTTPException(502, str(e))
+    memory.wa_add(body.phone, "out", body.text.strip(), author="менеджер")
+    return memory.wa_history(body.phone, 200)
+
+
+@app.post("/api/wa/autoreply")
+def wa_autoreply(body: ToggleIn):
+    memory.set_setting("wa_autoreply", "1" if body.on else "0")
+    return {"autoreply": body.on}
+
+
+@app.post("/api/wa/ideas")
+def wa_ideas(lang: str = "ru"):
+    try:
+        return {"text": whatsapp.ideas("kk" if lang == "kk" else "ru")}
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 
 if __name__ == "__main__":
