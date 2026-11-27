@@ -10,6 +10,7 @@ APP_TZ — часовой пояс для «сегодня/вчера» (по у
 """
 import json
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
@@ -23,13 +24,28 @@ _cache: dict = {}
 
 # ---------------------------------------------------------------- ключи и запросы
 def accounts() -> list[dict]:
-    """[{idx, name, key}] из PALOMA_API_KEY."""
-    raw = os.getenv("PALOMA_API_KEY", "").replace("\n", ",")
-    out = []
-    for i, part in enumerate(p.strip() for p in raw.split(",") if p.strip()):
-        name, key = (part.split(":", 1) if ":" in part and not part.startswith("ppik_") else (f"Аккаунт {i + 1}", part))
-        out.append({"idx": i, "name": name.strip(), "key": key.strip()})
+    """[{idx, name, key, named}] из PALOMA_API_KEY. Находит все ключи ppik_… в строке,
+    подпись — текст перед ключом (до двоеточия или «=»). Разделители, кавычки, Bearer, переносы — неважно."""
+    raw = os.getenv("PALOMA_API_KEY", "")
+    out, pos = [], 0
+    for m in re.finditer(r"pp[a-z]{2}_[A-Za-z0-9_\-\.~+/=]+", raw):
+        before = raw[pos:m.start()]
+        pos = m.end()
+        label = re.split(r"[,;\n\r]", before)[-1]
+        label = re.sub(r"(?i)bearer", "", label).strip(" \t\"'«»:=：-")
+        named = bool(label)
+        out.append({"idx": len(out), "name": label or f"Аккаунт {len(out) + 1}", "key": m.group(0), "named": named})
+    if not out:  # ключи другого формата: «Название:ключ, ключ2, …»
+        for part in (p.strip() for p in re.split(r"[,;\n]", raw) if p.strip()):
+            part = re.sub(r"(?i)^bearer\s+", "", part.strip("\"' "))
+            named = ":" in part
+            name, key = part.split(":", 1) if named else (f"Аккаунт {len(out) + 1}", part)
+            out.append({"idx": len(out), "name": name.strip(), "key": key.strip(), "named": named})
     return out
+
+
+def mask(key: str) -> str:
+    return f"{key[:9]}…{key[-4:]} ({len(key)} симв.)" if len(key) > 14 else key
 
 
 def connected() -> bool:
@@ -144,10 +160,12 @@ def locations() -> list[dict]:
         for a in accounts():
             try:
                 data = _get(a["key"], "/locations", {"limit": 200})
-                rows = data.get("data") if isinstance(data, dict) else None
-                for loc in rows or []:
-                    if isinstance(loc, dict) and not loc.get("deleted"):
-                        out.append({"id": f"{a['idx']}:{loc.get('id')}", "name": loc.get("name") or f"Точка {loc.get('id')}", "account": a["name"]})
+                rows = [l for l in (data.get("data") if isinstance(data, dict) else None) or [] if isinstance(l, dict) and not l.get("deleted")]
+                for loc in rows:
+                    nm = loc.get("name") or f"Точка {loc.get('id')}"
+                    if a.get("named"):  # подпись из PALOMA_API_KEY важнее названия в Paloma
+                        nm = a["name"] if len(rows) == 1 else f"{a['name']} · {nm}"
+                    out.append({"id": f"{a['idx']}:{loc.get('id')}", "name": nm, "paloma_name": loc.get("name"), "account": a["name"]})
                 if not rows:
                     out.append({"id": f"{a['idx']}:", "name": a["name"], "account": a["name"]})
             except Exception as e:
@@ -271,9 +289,11 @@ def _build(period: str, loc: str) -> dict:
             lr = get((a["idx"], lid, "loc"))
             if lr:
                 rows = _rows(lr, "location")
-                if len(accounts()) > 1 and len(rows) <= 1:
-                    for r in rows:
-                        r["label"] = a["name"] if r["label"] in ("None", "") else r["label"]
+                for r in rows:
+                    if a.get("named"):
+                        r["label"] = a["name"] if len(rows) == 1 else f"{a['name']} · {r['label']}"
+                    elif r["label"] in ("None", "") or (len(accounts()) > 1 and len(rows) == 1 and not r["label"]):
+                        r["label"] = a["name"]
                 locs.append(rows)
         if (a["idx"], lid, "wd") in jobs:
             w = get((a["idx"], lid, "wd"))
@@ -298,14 +318,18 @@ def raw(group_by: str = "day", days: int = 7, metrics: str = "net,orders"):
 
 def check() -> dict:
     if not connected():
-        return {"ok": False, "error": "PALOMA_API_KEY не задан"}
+        return {"ok": False, "error": "В PALOMA_API_KEY не найдено ни одного ключа ppik_…"}
     out = []
     for a in accounts():
+        info = {"account": a["name"], "key": mask(a["key"])}
         try:
-            out.append({"account": a["name"], "ok": True, "me": _get(a["key"], "/me")})
+            me = _get(a["key"], "/me")
+            info.update(ok=True, scopes=me.get("scopes") if isinstance(me, dict) else None, account_id=me.get("account_id") if isinstance(me, dict) else None)
         except Exception as e:
-            out.append({"account": a["name"], "ok": False, "error": str(e)})
-    return {"ok": all(x["ok"] for x in out), "accounts": out, "locations": locations()}
+            info.update(ok=False, error=str(e))
+        out.append(info)
+    _cache.pop("locations", None)
+    return {"ok": all(x["ok"] for x in out), "keys_found": len(out), "accounts": out, "locations": locations()}
 
 
 # ---------------------------------------------------------------- для агентов
