@@ -352,7 +352,7 @@ document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () =>
 const I18N = {
   ru: {
     emp:"Сотрудник", emp_ph:"Имя сотрудника", added:"Добавлен", saved:"Сохранено",
-    bday:"☀️+🌙 09:00–09:00",
+    bday:"☀️+🌙 09:00–09:00", k_returns:"Возвраты", k_discounts:"Скидки", sh_click:"нажмите на смену — кассы и время", sh_time:"Открыта – закрыта", sh_open:"открыта", chk:"чек.",
     tab_staff:"Персонал", s_att:"🕘 Приход и уход", s_ops:"🍳 Кухня и доставка", s_list:"👥 Сотрудники", p_link:"Страница для точки (отметка, кухня, курьер):",
     p_link_hint:"Откройте её на планшете или телефоне на каждой точке. Сотрудник входит по своему PIN.", st_none:"Сотрудников пока нет — добавьте во вкладке «Сотрудники».",
     on_shift:"Сейчас на смене", since:"с", h:"ч", nobody:"Никто не отметился", att_sum:"Сводка по сотрудникам", att_log:"Журнал прихода и ухода", role:"Должность",
@@ -390,7 +390,7 @@ const I18N = {
     m_cat:"Категория", m_dish:"Блюдо", m_desc:"Описание", m_price:"Цена", m_empty:"Меню пока не загружено.",
     rec_wait:"⏳ Распознаю меню, это может занять до минуты…", rec_ok:"✅ Распознано позиций: ",
     hist_empty:"Задач пока не было.", loading:"Загрузка…",
-    k_rev:"Выручка", k_avg:"В среднем за день", k_orders:"Заказов", k_days:"Дней с продажами", k_check:"Средний чек", sales_warn:"⚠️ Часть отчётов Paloma недоступна (подробнее)",
+    k_rev:"Выручка", k_avg:"В среднем за день", k_orders:"Чеков", k_days:"Дней с продажами", k_check:"Средний чек", sales_warn:"⚠️ Часть отчётов Paloma недоступна (подробнее)",
     t_daily:"Выручка по дням", tbl:"таблица", t_items:"Продажи по блюдам", t_week:"По дням недели",
     sales_off:`<div class="card"><h3>Paloma365 не подключена</h3><div class="md"><ol>
       <li>Войдите в кабинет Paloma365 (владельцем аккаунта).</li>
@@ -415,7 +415,7 @@ const I18N = {
   },
   kk: {
     emp:"Қызметкер", emp_ph:"Қызметкердің аты", added:"Қосылды", saved:"Сақталды",
-    bday:"☀️+🌙 09:00–09:00",
+    bday:"☀️+🌙 09:00–09:00", k_returns:"Қайтарулар", k_discounts:"Жеңілдіктер", sh_click:"ауысымды басыңыз — кассалар мен уақыт", sh_time:"Ашылды – жабылды", sh_open:"ашық", chk:"чек",
     tab_staff:"Қызметкерлер", s_att:"🕘 Келу-кету", s_ops:"🍳 Асхана және жеткізу", s_list:"👥 Қызметкерлер", p_link:"Нүкте беті (белгі, асхана, курьер):",
     p_link_hint:"Оны әр нүктедегі планшетте немесе телефонда ашыңыз. Қызметкер өз PIN-і арқылы кіреді.", st_none:"Әзірге қызметкер жоқ — «Қызметкерлер» бөлімінде қосыңыз.",
     on_shift:"Қазір ауысымда", since:"бастап", h:"сағ", nobody:"Ешкім белгі қоймады", att_sum:"Қызметкерлер бойынша қорытынды", att_log:"Келу-кету журналы", role:"Лауазымы",
@@ -453,7 +453,7 @@ const I18N = {
     m_cat:"Санат", m_dish:"Тағам", m_desc:"Сипаттама", m_price:"Баға", m_empty:"Мәзір әлі жүктелмеген.",
     rec_wait:"⏳ Мәзірді танып жатырмын, бір минутқа дейін созылуы мүмкін…", rec_ok:"✅ Танылған позициялар: ",
     hist_empty:"Әзірге тапсырма болған жоқ.", loading:"Жүктелуде…",
-    k_rev:"Түсім", k_avg:"Күніне орташа", k_orders:"Тапсырыстар", k_days:"Сатылым болған күндер", k_check:"Орташа чек", sales_warn:"⚠️ Paloma есептерінің бір бөлігі қолжетімсіз (толығырақ)",
+    k_rev:"Түсім", k_avg:"Күніне орташа", k_orders:"Чектер", k_days:"Сатылым болған күндер", k_check:"Орташа чек", sales_warn:"⚠️ Paloma есептерінің бір бөлігі қолжетімсіз (толығырақ)",
     t_daily:"Күндер бойынша түсім", tbl:"кесте", t_items:"Тағамдар бойынша сатылым", t_week:"Апта күндері бойынша",
     sales_off:`<div class="card"><h3>Paloma365 қосылмаған</h3><div class="md"><ol>
       <li>Paloma365 кабинетіне аккаунт иесі ретінде кіріңіз.</li>
@@ -561,7 +561,9 @@ async function loadSales(quiet){
     <div class="kpi"><small>${t("k_rev")} · ${esc(range)}</small><b>${fmt(T.net)} ₸</b>${chg(T.net, P.net)}</div>
     <div class="kpi"><small>${t("k_orders")}</small><b>${fmt(T.orders)}</b>${chg(T.orders, P.orders)}</div>
     <div class="kpi"><small>${t("k_check")}</small><b>${fmt(avg)} ₸</b>${chg(avg, pavg)}</div>
-    <div class="kpi"><small>${t("k_prev")}</small><b style="font-size:16px">${fmt(P.net)} ₸</b><small>${esc(d.prev_from)} — ${esc(d.prev_to)}</small></div></div>`;
+    <div class="kpi"><small>${t("k_prev")}</small><b style="font-size:16px">${fmt(P.net)} ₸</b><small>${esc(d.prev_from)} — ${esc(d.prev_to)}</small></div>
+    ${T.returns != null ? `<div class="kpi"><small>${t("k_returns")}</small><b style="font-size:18px;color:#fca5a5">${fmt(T.refunds)} · −${fmt(T.returns)} ₸</b></div>` : ""}
+    ${T.discounts != null ? `<div class="kpi"><small>${t("k_discounts")}</small><b style="font-size:18px">${fmt(T.discounts)} ₸</b><small>${T.net ? (T.discounts / (T.net + T.discounts) * 100).toFixed(1) + " %" : ""}</small></div>` : ""}</div>`;
   const ser = d.series || [];
   if (ser.length) {
     const mx = Math.max(...ser.map(r => r.net || 0), 1);
@@ -614,12 +616,22 @@ async function loadShifts(){
     return `<div class="kpi"><small>${SHIFT_ICON(s.name)} ${esc(shiftName(s.name))} ${hh(s.start)}–${hh(s.end)} · ${T.count || 0} ${t("shifts_n")}</small><b>${fmt(T.net)} ₸</b>
       <small>${t("k_orders")}: ${fmt(T.orders)} · ${t("k_avg_shift")}: ${fmt(T.count ? T.net / T.count : 0)} ₸</small></div>`; }).join("") + `</div>`;
   const dl = x => x.slice(8, 10) + "." + x.slice(5, 7);
-  html += `<div class="card"><h3>${t("t_shifts")}</h3><div class="md"><table><tr><th>${t("date")}</th><th>${t("shift")}</th><th>${t("k_rev")}</th><th>${t("k_orders")}</th><th>${t("k_check")}</th>${pts.map(p => `<th>${esc(p)}</th>`).join("")}</tr>
-    ${rows.map(b => { const cur = d.current && b.date === d.current.date && b.shift === d.current.shift;
-      return `<tr${cur ? ' style="background:#0e3a5c88"' : ""}><td>${dl(b.date)}</td><td>${SHIFT_ICON(b.shift)} ${esc(shiftName(b.shift))}${cur ? ` <span class="up">● ${t("now")}</span>` : ""}</td>
+  const tmr = x => x ? x.slice(11, 16) : "";
+  html += `<div class="card"><h3>${t("t_shifts")} <small>(${t("sh_click")})</small></h3><div class="md"><table><tr><th>${t("date")}</th><th>${t("shift")}</th><th>${t("sh_time")}</th><th>${t("k_rev")}</th><th>${t("k_orders")}</th><th>${t("k_check")}</th>${pts.map(p => `<th>${esc(p)}</th>`).join("")}</tr>
+    ${rows.map((b, i) => { const cur = b.open || (d.current && b.date === d.current.date && b.shift === d.current.shift && !(b.registers || []).length);
+      return `<tr class="sh-row" data-i="${i}" style="cursor:pointer${cur ? ";background:#0e3a5c88" : ""}"><td>${dl(b.date)}</td><td>${SHIFT_ICON(b.shift)} ${esc(shiftName(b.shift))}${b.open ? ` <span class="up">● ${t("sh_open")}</span>` : ""}</td>
+      <td><small>${b.opened ? tmr(b.opened) + " – " + (b.closed ? tmr(b.closed) : "…") : ""}</small></td>
       <td><b>${fmt(b.net)} ₸</b></td><td>${fmt(b.orders)}</td><td>${b.orders ? fmt(b.net / b.orders) + " ₸" : "—"}</td>${pts.map(p => `<td>${fmt(b.by_point[p] || 0)}</td>`).join("")}</tr>`; }).join("")}
   </table></div>${d.errors?.length ? `<div style="color:#fca5a5;font-size:12px;margin-top:6px">${d.errors.map(esc).join("<br>")}</div>` : ""}</div>`;
   box.innerHTML = html;
+  box.querySelectorAll(".sh-row").forEach(tr => tr.onclick = () => {
+    if (tr.nextElementSibling?.classList.contains("sh-det")) return tr.nextElementSibling.remove();
+    const b = rows[+tr.dataset.i], regs = b.registers || []; if (!regs.length) return;
+    const det = document.createElement("tr"); det.className = "sh-det";
+    det.innerHTML = `<td colspan="${6 + pts.length}"><table style="width:auto">${regs.map(r => `<tr><td>${esc(r.point)}</td><td>🖥 ${esc(r.workplace || "")}</td>
+      <td>${dl(r.opened)} ${tmr(r.opened)} – ${r.closed ? dl(r.closed) + " " + tmr(r.closed) : `<span class="up">${t("sh_open")}</span>`}</td><td><b>${fmt(r.net)} ₸</b></td><td>${fmt(r.orders)} ${t("chk")}</td></tr>`).join("")}</table></td>`;
+    tr.after(det);
+  });
 }
 $("#salesBtn").onclick = () => refreshMain(); $("#salesLoc").onchange = () => refreshMain();
 

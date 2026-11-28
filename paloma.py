@@ -311,39 +311,76 @@ def _metrics(a, lid, frm, to, metrics, group_by, limit=1000):
         raise
 
 
+def _parse_dt(v):
+    if not v:
+        return None
+    try:
+        return datetime.fromisoformat(str(v)[:19])
+    except ValueError:
+        return None
+
+
+def _biz_of_shift(opened: datetime, cfg: list[dict]):
+    """К какой смене (дата рабочего дня, название) относится смена кассы, открытая в `opened`.
+    Берём ближайшее плановое начало смены: 09:00 → дневная, 21:00 → ночная."""
+    best = None
+    for s_ in cfg:
+        for back in (0, 1, -1):
+            d = opened.date() - timedelta(days=back)
+            start = datetime(d.year, d.month, d.day, int(s_["start"]))
+            diff = abs((opened - start).total_seconds())
+            if best is None or diff < best[0]:
+                best = (diff, d, s_["name"])
+    return best[1], best[2]
+
+
+SHIFT_METRICS = ["net,orders,returns,discounts,return_receipts", "net,orders"]
+
+
+def _register_shifts(a, lid, frm, to):
+    """Смены касс за интервал: [{id, opened, closed, status, workplace, net, orders, returns, discounts, refunds}]."""
+    last = None
+    for metrics in SHIFT_METRICS:
+        try:
+            resp = _metrics(a, lid, frm, to, metrics, "shift", 500)
+            out = []
+            for r in resp.get("rows", []):
+                sh = (r.get("dims") or {}).get("shift") or {}
+                v = r.get("values") or {}
+                opened = _parse_dt(sh.get("opened_at"))
+                if not opened:
+                    continue
+                out.append({"id": sh.get("id"), "opened": opened, "closed": _parse_dt(sh.get("closed_at")), "status": sh.get("status"),
+                            "workplace": (sh.get("workplace") or {}).get("name"),
+                            "net": _num(v.get("net")) or 0.0, "orders": _num(v.get("orders")) or 0.0,
+                            "returns": _num(v.get("returns")), "discounts": _num(v.get("discounts")), "refunds": _num(v.get("return_receipts"))})
+            return out
+        except Exception as e:
+            last = e
+            if "metric" not in str(e).lower() and "invalid" not in str(e).lower():
+                break
+    raise last
+
+
 def _acc_data(a, lid, period):
-    """Все данные точки за период: почасовые продажи (для рабочих дней и смен) + продажи по блюдам.
+    """Данные точки: смены касс (точные итоги, как в Paloma), почасовой график (для дня), продажи по блюдам.
     Запросы строго по очереди. Кэшируется."""
     def load():
         start, end, pstart, pend, group = _range(period)
-        out = {"errors": [], "moments": None, "days": None}
-        wto = min(end + timedelta(days=1), today())       # ночная смена заканчивается на следующий день
-        chunks = [(pstart, wto)] if period != "month" else [(pstart, start), (start, wto)]
-        moments = []
-        for frm, to in chunks:
+        out = {"errors": [], "shifts": None, "moments": None, "days": None}
+        wto = min(end + timedelta(days=1), today())
+        # 1) смены касс — с запасом в день до и после, чтобы смены через полночь попали целиком
+        try:
+            out["shifts"] = _register_shifts(a, lid, pstart - timedelta(days=1), wto)
+        except Exception as e:
+            out["errors"].append(f"смены: {e}")
+        # 2) график по часам — только для «сегодня»/«вчера» (или если смены недоступны)
+        if group == "hour" or out["shifts"] is None:
             try:
-                m = _moments_day_hour(_metrics(a, lid, frm, to, "net,orders", "day,hour"))
-                if m is None:
-                    out["errors"].append("day,hour: неизвестный формат")
-                    moments = None
-                    break
-                moments += m
+                out["moments"] = _moments_day_hour(_metrics(a, lid, start if out["shifts"] is not None else pstart, wto, "net,orders", "day,hour"))
             except Exception as e:
                 out["errors"].append(str(e))
-                moments = None
-                break
-        if moments is not None:
-            seen, uniq = set(), []                        # месяц: на стыке двух запросов не считаем час дважды
-            for mm in moments:
-                if mm[0] not in seen:
-                    seen.add(mm[0]); uniq.append(mm)
-            out["moments"] = uniq
-        else:
-            # запасной путь, если Paloma не отдаёт «день × час»: календарные дни
-            try:
-                out["days"] = _rows(_metrics(a, lid, pstart, end, "net,orders", "day"), "day")
-            except Exception as e:
-                out["errors"].append(str(e))
+        # 3) продажи по блюдам
         try:
             out["items"] = _rows(_metrics(a, lid, start, end, "net", "item"), "item", item_names(a))
         except Exception as e:
@@ -353,65 +390,63 @@ def _acc_data(a, lid, period):
     return _cached(f"acc:{a['idx']}:{lid}:{period}", load, 25 if period in ("today", "yesterday") else CACHE_SECONDS)
 
 
-def _shift_moments(a, lid, period):
-    d = _acc_data(a, lid, period)
-    return d["moments"], d["errors"]
-
-
 def _build(period: str, loc: str) -> dict:
     start, end, pstart, pend, group = _range(period)
     targets = _targets(loc)
+    cfg = shifts_cfg()
     res = {"connected": True, "period": period, "from": start.isoformat(), "to": end.isoformat(),
-           "prev_from": pstart.isoformat(), "prev_to": pend.isoformat(), "group": group, "errors": []}
+           "prev_from": pstart.isoformat(), "prev_to": pend.isoformat(), "group": group, "errors": [], "business_day": True}
     with ThreadPoolExecutor(max_workers=6) as pool:   # точки — параллельно, внутри точки — по очереди
         datas = list(pool.map(lambda t: (t, _acc_data(t[0], t[1], period)), targets))
-    tot, prev = {"net": 0.0, "orders": 0.0}, {"net": 0.0, "orders": 0.0}
+    tot = {"net": 0.0, "orders": 0.0, "returns": 0.0, "discounts": 0.0, "refunds": 0.0}
+    prev = {"net": 0.0, "orders": 0.0}
     series, items, locs, wds = {}, [], [], {}
+    has_extra = False
+
+    def add_series(k, label, net, orders):
+        r = series.setdefault(k, {"label": label, "id": k, "net": 0.0, "orders": 0.0})
+        r["net"] += net; r["orders"] += orders
+
     for (a, lid), d in datas:
         res["errors"] += d["errors"]
-        acc_tot = {"net": 0.0, "orders": 0.0}
-        if d.get("moments") is not None:
-            cfg = shifts_cfg()
-            for dt, net, orders in d["moments"]:
-                day, _sn = _shift_of(dt, cfg)            # рабочий день: дневная + ночная смена
-                if start <= day <= end:
-                    acc_tot["net"] += net; acc_tot["orders"] += orders
-                    k = dt.hour if group == "hour" else day.isoformat()
-                    srow = series.setdefault(k, {"label": f"{dt.hour:02d}:00" if group == "hour" else day.isoformat(), "id": k, "net": 0.0, "orders": 0.0})
-                    srow["net"] += net; srow["orders"] += orders
-                    if period == "month":
-                        w = wds.setdefault(day.isoweekday(), {"label": str(day.isoweekday()), "id": day.isoweekday(), "net": 0.0, "orders": 0.0})
-                        w["net"] += net; w["orders"] += orders
-                elif pstart <= day <= pend:
-                    prev["net"] += net; prev["orders"] += orders
-        else:
-            for r in d.get("days") or []:
-                day = _date_of(r["id"]) or _date_of(r["label"])
-                if not day:
-                    continue
-                if start <= day <= end:
-                    acc_tot["net"] += r["net"] or 0; acc_tot["orders"] += r["orders"] or 0
+        acc = {"net": 0.0, "orders": 0.0}
+        if d.get("shifts") is not None:
+            for sh in d["shifts"]:
+                bd, _name = _biz_of_shift(sh["opened"], cfg)
+                if start <= bd <= end:
+                    acc["net"] += sh["net"]; acc["orders"] += sh["orders"]
+                    for k in ("returns", "discounts", "refunds"):
+                        if sh[k] is not None:
+                            tot[k] += sh[k]; has_extra = True
                     if group == "day":
-                        srow = series.setdefault(day.isoformat(), {"label": day.isoformat(), "id": day.isoformat(), "net": 0.0, "orders": 0.0})
-                        srow["net"] += r["net"] or 0; srow["orders"] += r["orders"] or 0
+                        add_series(bd.isoformat(), bd.isoformat(), sh["net"], sh["orders"])
                     if period == "month":
-                        w = wds.setdefault(day.isoweekday(), {"label": str(day.isoweekday()), "id": day.isoweekday(), "net": 0.0, "orders": 0.0})
-                        w["net"] += r["net"] or 0; w["orders"] += r["orders"] or 0
-                elif pstart <= day <= pend:
-                    prev["net"] += r["net"] or 0; prev["orders"] += r["orders"] or 0
-            for r in d.get("hours") or []:
-                h = _hour_of(r["id"] if r["id"] is not None else r["label"])
-                if h is None:
-                    continue
-                srow = series.setdefault(h, {"label": f"{h:02d}:00", "id": h, "net": 0.0, "orders": 0.0})
-                srow["net"] += r["net"] or 0; srow["orders"] += r["orders"] or 0
-        tot["net"] += acc_tot["net"]; tot["orders"] += acc_tot["orders"]
+                        w = wds.setdefault(bd.isoweekday(), {"label": str(bd.isoweekday()), "id": bd.isoweekday(), "net": 0.0, "orders": 0.0})
+                        w["net"] += sh["net"]; w["orders"] += sh["orders"]
+                elif pstart <= bd <= pend:
+                    prev["net"] += sh["net"]; prev["orders"] += sh["orders"]
+            if group == "hour" and d.get("moments"):
+                for dt, net, orders in d["moments"]:
+                    bd, _sn = _shift_of(dt, cfg)
+                    if start <= bd <= end:
+                        add_series(dt.hour, f"{dt.hour:02d}:00", net, orders)
+        elif d.get("moments") is not None:          # запасной путь: по часам
+            for dt, net, orders in d["moments"]:
+                bd, _sn = _shift_of(dt, cfg)
+                if start <= bd <= end:
+                    acc["net"] += net; acc["orders"] += orders
+                    add_series(dt.hour if group == "hour" else bd.isoformat(), f"{dt.hour:02d}:00" if group == "hour" else bd.isoformat(), net, orders)
+                elif pstart <= bd <= pend:
+                    prev["net"] += net; prev["orders"] += orders
+        tot["net"] += acc["net"]; tot["orders"] += acc["orders"]
         items.append(d.get("items") or [])
-        locs.append([{"label": a["name"], "id": a["idx"], "net": acc_tot["net"], "orders": acc_tot["orders"]}])
+        locs.append([{"label": a["name"], "id": a["idx"], "net": acc["net"], "orders": acc["orders"]}])
+    if not has_extra:
+        for k in ("returns", "discounts", "refunds"):
+            tot[k] = None
     res["totals"], res["prev"] = tot, prev
-    first_h = min((int(x["start"]) for x in shifts_cfg()), default=0)   # часы рабочего дня: 09, 10 … 23, 00 … 08
+    first_h = min((int(x["start"]) for x in cfg), default=0)
     res["series"] = sorted(series.values(), key=lambda r: (r["id"] - first_h) % 24 if isinstance(r["id"], int) else str(r["id"]))
-    res["business_day"] = any(d.get("moments") is not None for _, d in datas)
     res["by_item"] = _merge(items, "net")
     res["by_location"] = _merge(locs, "net") if len(targets) > 1 else []
     res["by_weekday"] = sorted(wds.values(), key=lambda r: r["id"])
@@ -565,39 +600,62 @@ def _build_shifts(period: str, loc: str) -> dict:
     start, end, *_ = _range(period)
     cfg = shifts_cfg()
     targets = _targets(loc)
-    overnight = {s["name"] for s in cfg if int(s["start"]) > int(s["end"])}
-    res = {"connected": True, "from": start.isoformat(), "to": end.isoformat(), "shifts": cfg, "errors": [], "method": "day×hour"}
+    res = {"connected": True, "from": start.isoformat(), "to": end.isoformat(), "shifts": cfg, "errors": [], "method": "register_shifts"}
     buckets = {}
     with ThreadPoolExecutor(max_workers=6) as pool:
-        datas = list(pool.map(lambda t: (t, _shift_moments(t[0], t[1], period)), targets))
-    for (a, lid), (moments, errs) in datas:
-        if moments is None:
-            res["errors"].append(f"{a['name']}: " + "; ".join(errs))
+        datas = list(pool.map(lambda t: (t, _acc_data(t[0], t[1], period)), targets))
+    open_now = None
+    for (a, lid), d in datas:
+        if d.get("shifts") is None:
+            # запасной путь — по часам
+            moments = d.get("moments")
+            if moments is None:
+                res["errors"].append(f"{a['name']}: " + "; ".join(d["errors"]))
+                continue
+            res["method"] = "day×hour"
+            for dt, net, orders in moments:
+                sd, sname = _shift_of(dt, cfg)
+                if start <= sd <= end:
+                    b = buckets.setdefault((sd.isoformat(), sname), {"date": sd.isoformat(), "shift": sname, "net": 0.0, "orders": 0.0, "by_point": {}, "registers": []})
+                    b["net"] += net; b["orders"] += orders
+                    b["by_point"][a["name"]] = b["by_point"].get(a["name"], 0) + net
             continue
-        for dt, net, orders in moments:
-            sd, sname = _shift_of(dt, cfg)
-            # в период входят смены, начавшиеся в нём, и ночная смена накануне первого дня (она заканчивается уже в периоде)
+        for sh in d["shifts"]:
+            sd, sname = _biz_of_shift(sh["opened"], cfg)
             if not (start <= sd <= end):
                 continue
-            b = buckets.setdefault((sd.isoformat(), sname), {"date": sd.isoformat(), "shift": sname, "net": 0.0, "orders": 0.0, "by_point": {}})
-            b["net"] += net
-            b["orders"] += orders
-            b["by_point"][a["name"]] = b["by_point"].get(a["name"], 0) + net
-    order = {s["name"]: i for i, s in enumerate(cfg)}
+            b = buckets.setdefault((sd.isoformat(), sname), {"date": sd.isoformat(), "shift": sname, "net": 0.0, "orders": 0.0, "by_point": {}, "registers": []})
+            b["net"] += sh["net"]; b["orders"] += sh["orders"]
+            b["by_point"][a["name"]] = b["by_point"].get(a["name"], 0) + sh["net"]
+            b["registers"].append({"point": a["name"], "workplace": sh["workplace"], "opened": sh["opened"].isoformat(timespec="minutes"),
+                                   "closed": sh["closed"].isoformat(timespec="minutes") if sh["closed"] else None, "status": sh["status"],
+                                   "net": sh["net"], "orders": sh["orders"]})
+            if sh["status"] == "open":
+                open_now = (sd.isoformat(), sname)
+    for b in buckets.values():
+        regs = b["registers"]
+        b["opened"] = min((r["opened"] for r in regs), default=None)
+        b["closed"] = None if any(r["status"] == "open" for r in regs) else max((r["closed"] or "" for r in regs), default=None) or None
+        b["open"] = any(r["status"] == "open" for r in regs)
+        regs.sort(key=lambda r: (r["point"], r["workplace"] or ""))
+    order = {s_["name"]: i for i, s_ in enumerate(cfg)}
     rows = sorted(buckets.values(), key=lambda b: (b["date"], order.get(b["shift"], 9)), reverse=True)
     res["rows"] = rows
-    res["totals"] = {s["name"]: {"net": sum(b["net"] for b in rows if b["shift"] == s["name"]),
-                                 "orders": sum(b["orders"] for b in rows if b["shift"] == s["name"]),
-                                 "count": sum(1 for b in rows if b["shift"] == s["name"])} for s in cfg}
+    res["totals"] = {s_["name"]: {"net": sum(b["net"] for b in rows if b["shift"] == s_["name"]),
+                                  "orders": sum(b["orders"] for b in rows if b["shift"] == s_["name"]),
+                                  "count": sum(1 for b in rows if b["shift"] == s_["name"])} for s_ in cfg}
     seen = {p for b in rows for p in b["by_point"]}
     res["points"] = [a["name"] for a, _ in targets if a["name"] in seen] if len(targets) > 1 else []
-    try:
-        from zoneinfo import ZoneInfo
-        now = datetime.now(ZoneInfo(os.getenv("APP_TZ", "Asia/Almaty"))).replace(tzinfo=None)
-    except Exception:
-        now = datetime.utcnow() + timedelta(hours=5)
-    cd, cs = _shift_of(now, cfg)
-    res["current"] = {"date": cd.isoformat(), "shift": cs}
+    if open_now:
+        res["current"] = {"date": open_now[0], "shift": open_now[1]}
+    else:
+        try:
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo(os.getenv("APP_TZ", "Asia/Almaty"))).replace(tzinfo=None)
+        except Exception:
+            now = datetime.utcnow() + timedelta(hours=5)
+        cd, cs = _shift_of(now, cfg)
+        res["current"] = {"date": cd.isoformat(), "shift": cs}
     res["errors"] = list(dict.fromkeys(res["errors"]))
     return res
 
