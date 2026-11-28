@@ -79,6 +79,14 @@ def init_db():
     )
     _run(f"CREATE TABLE IF NOT EXISTS attendance (id {pk}, staff_id INTEGER NOT NULL, point TEXT, kind TEXT NOT NULL, ts TEXT NOT NULL, lat REAL, lng REAL)")
     _run(f"CREATE TABLE IF NOT EXISTS stock_log (id {pk}, stock_id INTEGER, delta REAL, unit TEXT, note TEXT, created TEXT)")
+    _run(f"CREATE TABLE IF NOT EXISTS suppliers (id {pk}, name TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, sort INTEGER, created TEXT)")
+    _run(
+        f"CREATE TABLE IF NOT EXISTS purchases (id {pk}, supplier_id INTEGER NOT NULL, kind TEXT NOT NULL, amount REAL NOT NULL, "
+        "day TEXT NOT NULL, point TEXT, note TEXT, created TEXT)"
+    )
+    if _run("SELECT COUNT(*) AS n FROM suppliers", fetch="one")["n"] == 0:
+        _run("INSERT INTO suppliers(name, active, sort, created) VALUES (?, 1, ?, ?)",
+             [(n, i, _now()) for i, n in enumerate(DEFAULT_SUPPLIERS)], many=True)
     if _run("SELECT COUNT(*) AS n FROM facts", fetch="one")["n"] == 0:
         _run(
             "INSERT INTO facts(text, created) VALUES (?, ?)",
@@ -543,4 +551,120 @@ def memory_context() -> str:
             lines.append(f"- [{m['category']}] {m['name']} — {price}")
     else:
         lines.append("- меню ещё не загружено")
-    return "\n".join(lines) + stock_context() + attendance_context() + ops_context()
+    return "\n".join(lines) + stock_context() + attendance_context() + ops_context() + purchases_context()
+
+
+# ---------- закуп: поставщики, закупы и оплаты ----------
+DEFAULT_SUPPLIERS = ["НУРИЯ АПА", "ТАНШОЛПАН", "ЕТ", "ЛАВАШ", "ОВОЩИ", "ЧИПСЫ"]
+MONTHS_RU = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
+
+
+def supplier_list(active_only: bool = False):
+    q = "SELECT * FROM suppliers" + (" WHERE active = 1" if active_only else "") + " ORDER BY active DESC, sort, id"
+    return _run(q, fetch="all")
+
+
+def supplier_add(name: str):
+    name = name.strip()
+    if not name:
+        raise ValueError("Введите название поставщика")
+    ex = _run("SELECT id FROM suppliers WHERE UPPER(name) = UPPER(?)", (name,), fetch="one")
+    if ex:
+        _run("UPDATE suppliers SET active = 1 WHERE id = ?", (ex["id"],))
+        return
+    n = _run("SELECT COALESCE(MAX(sort), 0) AS m FROM suppliers", fetch="one")["m"] or 0
+    _run("INSERT INTO suppliers(name, active, sort, created) VALUES (?, 1, ?, ?)", (name, n + 1, _now()))
+
+
+def supplier_update(sid: int, name: str, active: bool = True):
+    if not name.strip():
+        raise ValueError("Введите название поставщика")
+    _run("UPDATE suppliers SET name = ?, active = ? WHERE id = ?", (name.strip(), 1 if active else 0, sid))
+
+
+def supplier_delete(sid: int):
+    """Записи остаются в отчётах; поставщик просто скрывается из списка."""
+    if _run("SELECT COUNT(*) AS n FROM purchases WHERE supplier_id = ?", (sid,), fetch="one")["n"]:
+        _run("UPDATE suppliers SET active = 0 WHERE id = ?", (sid,))
+    else:
+        _run("DELETE FROM suppliers WHERE id = ?", (sid,))
+
+
+def _purchase_clean(d: dict) -> tuple:
+    kind = d.get("kind") if d.get("kind") in ("buy", "pay") else "buy"
+    amount = float(d.get("amount") or 0)
+    if amount <= 0:
+        raise ValueError("Введите сумму больше нуля")
+    day = (d.get("day") or local_now().date().isoformat())[:10]
+    datetime.strptime(day, "%Y-%m-%d")
+    sid = int(d.get("supplier_id") or 0)
+    if not _run("SELECT id FROM suppliers WHERE id = ?", (sid,), fetch="one"):
+        raise ValueError("Выберите поставщика")
+    return sid, kind, round(amount, 2), day, (d.get("point") or "").strip(), (d.get("note") or "").strip()
+
+
+def purchase_add(d: dict):
+    _run("INSERT INTO purchases(supplier_id, kind, amount, day, point, note, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
+         _purchase_clean(d) + (_now(),))
+
+
+def purchase_update(pid: int, d: dict):
+    _run("UPDATE purchases SET supplier_id = ?, kind = ?, amount = ?, day = ?, point = ?, note = ? WHERE id = ?",
+         _purchase_clean(d) + (pid,))
+
+
+def purchase_delete(pid: int):
+    _run("DELETE FROM purchases WHERE id = ?", (pid,))
+
+
+def purchase_report(year: int, month: int = 0, point: str = "") -> dict:
+    """Отчёт по поставщикам за год (month=0) или за месяц.
+    Долг считается накопительно: долг на начало + закуп − оплачено = долг на конец."""
+    if month:
+        start = f"{year:04d}-{month:02d}-01"
+        end = f"{year + (month == 12):04d}-{month % 12 + 1:02d}-01"
+    else:
+        start, end = f"{year:04d}-01-01", f"{year + 1:04d}-01-01"
+    pq, pp = (" AND p.point = ?", (point,)) if point else ("", ())
+    sup = supplier_list()
+    rows = {s["id"]: {"id": s["id"], "name": s["name"], "active": s["active"], "opening": 0.0, "buy": 0.0, "pay": 0.0,
+                      "months": [0.0] * 12, "months_pay": [0.0] * 12, "count": 0} for s in sup}
+    for r in _run("SELECT supplier_id, kind, SUM(amount) AS s FROM purchases p WHERE day < ?" + pq + " GROUP BY supplier_id, kind",
+                  (start,) + pp, fetch="all"):
+        if r["supplier_id"] in rows:
+            rows[r["supplier_id"]]["opening"] += (r["s"] or 0) * (1 if r["kind"] == "buy" else -1)
+    recs = _run("SELECT p.*, s.name AS supplier FROM purchases p LEFT JOIN suppliers s ON s.id = p.supplier_id "
+                "WHERE day >= ? AND day < ?" + pq + " ORDER BY day DESC, p.id DESC", (start, end) + pp, fetch="all")
+    for r in recs:
+        x = rows.get(r["supplier_id"])
+        if not x:
+            continue
+        m = int(r["day"][5:7]) - 1
+        x[r["kind"]] += r["amount"]
+        (x["months"] if r["kind"] == "buy" else x["months_pay"])[m] += r["amount"]
+        x["count"] += 1
+    out = []
+    for x in rows.values():
+        x["closing"] = x["opening"] + x["buy"] - x["pay"]
+        if x["active"] or x["count"] or abs(x["opening"]) > 0.005:
+            out.append(x)
+    tot = {k: sum(x[k] for x in out) for k in ("opening", "buy", "pay", "closing")}
+    tot["months"] = [sum(x["months"][i] for x in out) for i in range(12)]
+    tot["months_pay"] = [sum(x["months_pay"][i] for x in out) for i in range(12)]
+    return {"year": year, "month": month, "point": point, "from": start, "to": end,
+            "suppliers": out, "totals": tot, "records": recs}
+
+
+def purchases_context() -> str:
+    try:
+        rep = purchase_report(local_now().year)
+    except Exception:
+        return ""
+    if not any(x["count"] or x["opening"] for x in rep["suppliers"]):
+        return ""
+    lines = [f"\nЗАКУП {rep['year']} (по поставщикам: закуп / оплачено / долг на сегодня):"]
+    for x in rep["suppliers"]:
+        lines.append(f"- {x['name']}: {x['buy']:,.0f} ₸ / {x['pay']:,.0f} ₸ / долг {x['closing']:,.0f} ₸".replace(",", " "))
+    t = rep["totals"]
+    lines.append(f"- ИТОГО: закуп {t['buy']:,.0f} ₸, оплачено {t['pay']:,.0f} ₸, долг {t['closing']:,.0f} ₸".replace(",", " "))
+    return "\n".join(lines)

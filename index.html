@@ -140,6 +140,26 @@
   .st-badge{font-size:11px;padding:2px 7px;border-radius:99px;background:#1e293b;border:1px solid var(--line)}
   .new-flash td{animation:flash 2s}
   @keyframes flash{from{background:#22d3ee44}to{background:transparent}}
+  .bform{display:grid;grid-template-columns:auto 1.4fr 1fr 1.2fr 1fr 1.6fr auto auto;gap:8px;margin:8px 0;align-items:center}
+  .bform input,.bform select,#buyBar select,.supadd input{background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:9px;font:inherit;min-width:0}
+  @media (max-width:900px){.bform{grid-template-columns:1fr 1fr}}
+  .sups{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:12px}
+  .sup{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;transition:all .2s}
+  .sup:hover,.sup.on{border-color:#22d3ee;box-shadow:0 0 14px #22d3ee33}
+  .sup h4{margin:0 0 8px;font-size:15px;letter-spacing:.3px}
+  .sup .l{display:flex;justify-content:space-between;font-size:13px;color:var(--mute);margin:2px 0}
+  .sup .l b{font-weight:600}
+  .sup .debt{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+  .sup .debt b{font-size:19px}
+  .pos,.kpi b.pos{color:#f87171;text-shadow:0 0 10px #f8717144}.neg,.kpi b.neg,.kpi b.kpay{color:#34d399;text-shadow:none}
+  .sup .debt span{white-space:nowrap}.sup .debt b{text-align:right}
+  .sup .paybtn{margin-top:8px;width:100%;background:none;border:1px solid var(--line);color:#67e8f9;border-radius:8px;padding:6px;cursor:pointer;font:inherit;font-size:13px}
+  .sup .paybtn:hover{border-color:#22d3ee}
+  .kbuy{color:#67e8f9}.kpay{color:#34d399}
+  .mtab td,.mtab th{text-align:right;white-space:nowrap}.mtab td:first-child,.mtab th:first-child{text-align:left}
+  .supadd{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .suprow{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+  .suprow span{flex:1}
 </style>
 
 </head>
@@ -151,6 +171,7 @@
     <button data-tab="hq" class="on" data-i18n="tab_hq">Штаб</button>
     <button data-tab="sales" data-i18n="tab_main">Главная</button>
     <button data-tab="stock" data-i18n="tab_stock">Склад</button>
+    <button data-tab="buy" data-i18n="tab_buy">Закуп</button>
     <button data-tab="staff" data-i18n="tab_staff">Персонал</button>
     <button data-tab="wa">WhatsApp</button>
     <button data-tab="menu" data-i18n="tab_menu">Меню</button>
@@ -238,6 +259,33 @@
       <small data-i18n="st_hint">Минимум — при каком остатке подсвечивать красным и подсказывать закупщику.</small>
     </div>
     <div id="stTable"></div>
+  </section>
+
+  <!-- ЗАКУП -->
+  <section id="buy" class="tab">
+    <div class="row" id="buyBar" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <h2 style="margin:0" data-i18n="buy_h">Закуп и оплаты поставщикам</h2>
+      <div class="row" style="flex-wrap:wrap;gap:8px">
+        <select id="bYear"></select><select id="bMonth"></select><select id="bPoint"></select>
+        <button class="main" id="bPdf" style="padding:8px 14px" data-i18n="b_pdf">📄 Скачать PDF</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3 id="bFormTitle" data-i18n="b_new">Новая запись</h3>
+      <div class="bform">
+        <div class="seg" id="bKind"><button data-k="buy" class="on" data-i18n="b_k_buy">📦 Закуп</button><button data-k="pay" data-i18n="b_k_pay">💳 Оплата</button></div>
+        <select id="bSup"></select>
+        <input type="date" id="bDay">
+        <select id="bPt"></select>
+        <input type="number" id="bAmt" min="0" step="any" data-i18n-ph="b_amt" placeholder="Сумма, ₸">
+        <input type="text" id="bNote" data-i18n-ph="b_note" placeholder="Комментарий (накладная, что привезли)">
+        <button class="main" id="bSave" style="padding:10px 16px" data-i18n="st_btn_add">Добавить</button>
+        <button id="bCancel" class="copy" style="display:none;float:none" data-i18n="st_cancel">Отмена</button>
+      </div>
+      <small data-i18n="b_hint">«Закуп» — сколько привёз поставщик (долг растёт). «Оплата» — сколько вы ему заплатили (долг уменьшается).</small>
+      <div id="bMsg" style="margin-top:6px"></div>
+    </div>
+    <div id="buyBox"></div>
   </section>
 
   <!-- WHATSAPP -->
@@ -342,6 +390,7 @@ document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () =>
   if (b.dataset.tab === "menu") loadMenu();
   if (b.dataset.tab === "sales") refreshMain();
   if (b.dataset.tab === "stock") loadStock();
+  if (b.dataset.tab === "buy") loadBuy();
   if (b.dataset.tab === "staff") loadStaffTab();
   if (b.dataset.tab === "wa") loadWA();
   if (b.dataset.tab === "mem") loadFacts();
@@ -365,6 +414,12 @@ const I18N = {
     o_count:"Заказов", o_sum:"Сумма заказов", o_click:"нажмите на заказ — откроется состав", o_time:"Время", o_type:"Тип", o_status:"Статус", o_lines:"Поз.", o_total:"Сумма",
     i_total:"Всего товаров", i_sold:"продавались за период", i_sold_sum:"Продано на",
     t_shifts:"По сменам", shifts_n:"смен", k_avg_shift:"в среднем за смену", date:"Дата", shift:"Смена", now:"сейчас", no_data:"Нет данных за период.",
+    tab_buy:"Закуп", buy_h:"Закуп и оплаты поставщикам", b_pdf:"📄 Скачать PDF", b_new:"Новая запись", b_edit:"Изменить запись", b_k_buy:"📦 Закуп", b_k_pay:"💳 Оплата",
+    b_amt:"Сумма, ₸", b_note:"Комментарий (накладная, что привезли)", b_hint:"«Закуп» — сколько привёз поставщик (долг растёт). «Оплата» — сколько вы ему заплатили (долг уменьшается).",
+    b_year:"Весь год", b_buy:"Закуп", b_pay:"Оплачено", b_debt:"К оплате", b_open:"Долг на начало", b_total_debt:"Всего к оплате", b_sup:"Поставщик", b_paybtn:"💳 Оплатить долг",
+    b_months:"Закуп по месяцам", b_journal:"Журнал записей", b_all_sup:"все поставщики", b_empty:"Записей пока нет. Добавьте первый закуп или оплату выше.", b_sups:"Поставщики",
+    b_add_sup:"Новый поставщик", b_add:"Добавить", b_rename:"Новое название", b_del_sup:"Убрать поставщика", b_confirm:"Удалить запись", b_saved:"✅ Сохранено", b_no_point:"Общий (без точки)",
+    b_overpaid:"переплата", b_choose:"Выберите поставщика", b_bad_amt:"Введите сумму", b_type:"Тип", b_records:"записей", b_click:"нажмите на поставщика — покажу только его записи",
     tab_stock:"Склад", p_today:"Сегодня", p_yesterday:"Вчера", p_week:"Неделя", p_month:"Месяц", all_points:"Все точки", point:"Точка",
     k_prev:"Прошлый период", t_hourly:"Выручка по часам", t_points:"По точкам",
     stock_h:"Склад", st_search:"Поиск…", st_ask:"🤖 Что закупить?", st_add:"Добавить продукт", st_name:"Название", st_cat:"Категория",
@@ -428,6 +483,12 @@ const I18N = {
     o_count:"Тапсырыстар", o_sum:"Тапсырыстар сомасы", o_click:"тапсырысты басыңыз — құрамы ашылады", o_time:"Уақыты", o_type:"Түрі", o_status:"Күйі", o_lines:"Поз.", o_total:"Сома",
     i_total:"Барлық тауар", i_sold:"кезеңде сатылғаны", i_sold_sum:"Сатылды",
     t_shifts:"Ауысымдар бойынша", shifts_n:"ауысым", k_avg_shift:"бір ауысымға орташа", date:"Күні", shift:"Ауысым", now:"қазір", no_data:"Кезең бойынша дерек жоқ.",
+    tab_buy:"Сатып алу", buy_h:"Жеткізушілерден сатып алу және төлемдер", b_pdf:"📄 PDF жүктеу", b_new:"Жаңа жазба", b_edit:"Жазбаны өзгерту", b_k_buy:"📦 Сатып алу", b_k_pay:"💳 Төлем",
+    b_amt:"Сома, ₸", b_note:"Түсініктеме (жүкқұжат, не әкелді)", b_hint:"«Сатып алу» — жеткізуші қанша әкелді (қарыз өседі). «Төлем» — сіз қанша төледіңіз (қарыз азаяды).",
+    b_year:"Бүкіл жыл", b_buy:"Сатып алу", b_pay:"Төленді", b_debt:"Төлеу керек", b_open:"Басындағы қарыз", b_total_debt:"Барлығы төлеу керек", b_sup:"Жеткізуші", b_paybtn:"💳 Қарызды төлеу",
+    b_months:"Айлар бойынша сатып алу", b_journal:"Жазбалар журналы", b_all_sup:"барлық жеткізушілер", b_empty:"Әзірге жазба жоқ. Жоғарыда алғашқы сатып алуды немесе төлемді қосыңыз.", b_sups:"Жеткізушілер",
+    b_add_sup:"Жаңа жеткізуші", b_add:"Қосу", b_rename:"Жаңа атауы", b_del_sup:"Жеткізушіні алып тастау", b_confirm:"Жазбаны өшіру", b_saved:"✅ Сақталды", b_no_point:"Ортақ (нүктесіз)",
+    b_overpaid:"артық төлем", b_choose:"Жеткізушіні таңдаңыз", b_bad_amt:"Соманы енгізіңіз", b_type:"Түрі", b_records:"жазба", b_click:"жеткізушіні басыңыз — тек оның жазбаларын көрсетемін",
     tab_stock:"Қойма", p_today:"Бүгін", p_yesterday:"Кеше", p_week:"Апта", p_month:"Ай", all_points:"Барлық нүктелер", point:"Нүкте",
     k_prev:"Өткен кезең", t_hourly:"Сағат бойынша түсім", t_points:"Нүктелер бойынша",
     stock_h:"Қойма", st_search:"Іздеу…", st_ask:"🤖 Не сатып алу керек?", st_add:"Өнім қосу", st_name:"Атауы", st_cat:"Санат",
@@ -492,7 +553,7 @@ function applyLang(){
     OFFICE.setNames(NAME);
   if (INFO) setBadge();
   const on = document.querySelector("nav button.on[data-tab]")?.dataset.tab;
-  if (on === "menu") loadMenu(); if (on === "hist") loadHistory(); if (on === "sales") refreshMain(); if (on === "wa") loadWA(); if (on === "stock") { unitOptions($("#stUnit")); loadStock(); } if (on === "staff") loadStaffTab();
+  if (on === "menu") loadMenu(); if (on === "hist") loadHistory(); if (on === "sales") refreshMain(); if (on === "wa") loadWA(); if (on === "stock") { unitOptions($("#stUnit")); loadStock(); } if (on === "staff") loadStaffTab(); if (on === "buy") loadBuy();
 }
 document.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
   LANG = b.dataset.lang; try { localStorage.setItem("fh_lang", LANG); } catch {} applyLang();
@@ -880,6 +941,97 @@ $("#stSave").onclick = async () => {
   try { await stCall(stEdit ? "/api/stock/" + stEdit : "/api/stock", stEdit ? "PUT" : "POST", body); stReset(); } catch (e) { alert(e.message); }
 };
 $("#stName").onkeydown = $("#stQty").onkeydown = e => e.key === "Enter" && $("#stSave").click();
+// ---------- закуп ----------
+let BUY = null, BSUPS = [], bKind = "buy", bEdit = null, bFilter = 0;
+const MON = () => LANG === "kk" ? ["Қаңтар","Ақпан","Наурыз","Сәуір","Мамыр","Маусым","Шілде","Тамыз","Қыркүйек","Қазан","Қараша","Желтоқсан"] : ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+function bQuery(){ return `year=${$("#bYear").value}&month=${$("#bMonth").value}&point=${encodeURIComponent($("#bPoint").value)}`; }
+function bSetKind(k){ bKind = k; document.querySelectorAll("#bKind button").forEach(b => b.classList.toggle("on", b.dataset.k === k)); }
+document.querySelectorAll("#bKind button").forEach(b => b.onclick = () => bSetKind(b.dataset.k));
+async function loadBuy(){
+  const y = new Date().getFullYear(), ys = $("#bYear"), ms = $("#bMonth");
+  if (!ys.options.length) { for (let i = y + 1; i >= 2024; i--) ys.add(new Option(i, i)); ys.value = y; }
+  const mcur = ms.value; ms.innerHTML = `<option value="0">${t("b_year")}</option>` + MON().map((m, i) => `<option value="${i + 1}">${m}</option>`).join(""); ms.value = mcur || "0";
+  try {
+    const sd = await bApi("/api/suppliers"); BSUPS = sd.suppliers; POINTS = sd.points;
+    const pc = $("#bPoint").value; $("#bPoint").innerHTML = `<option value="">${t("all_points")}</option>` + POINTS.map(p => `<option>${esc(p)}</option>`).join(""); $("#bPoint").value = pc;
+    const pt = $("#bPt").value; $("#bPt").innerHTML = `<option value="">${t("b_no_point")}</option>` + POINTS.map(p => `<option>${esc(p)}</option>`).join(""); $("#bPt").value = pt;
+    const sc = $("#bSup").value; $("#bSup").innerHTML = `<option value="">— ${t("b_sup")} —</option>` + BSUPS.filter(s => s.active).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join(""); $("#bSup").value = sc;
+    if (!$("#bDay").value) $("#bDay").value = todayISO();
+    BUY = await bApi("/api/purchases?" + bQuery());
+    renderBuy();
+  } catch (e) { $("#buyBox").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+}
+function renderBuy(){
+  const d = BUY, T = d.totals, m = d.month;
+  const money = v => `${fmt(v)} ₸`;
+  const debtCls = v => v > 0.5 ? "pos" : v < -0.5 ? "neg" : "";
+  const debtTxt = v => v < -0.5 ? `${money(-v)} <small>(${t("b_overpaid")})</small>` : money(v);
+  let h = `<div class="kpis">
+    <div class="kpi"><small>${t("b_buy")}</small><b class="kbuy">${money(T.buy)}</b></div>
+    <div class="kpi"><small>${t("b_pay")}</small><b class="kpay">${money(T.pay)}</b></div>
+    <div class="kpi"><small>${t("b_total_debt")}</small><b class="${debtCls(T.closing)}">${debtTxt(T.closing)}</b></div>
+    ${Math.abs(T.opening) > 0.5 ? `<div class="kpi"><small>${t("b_open")}</small><b>${money(T.opening)}</b></div>` : ""}</div>`;
+  h += `<small style="display:block;margin:-4px 0 8px">${t("b_click")}</small><div class="sups">` + d.suppliers.map(x => `<div class="sup ${bFilter === x.id ? "on" : ""}" data-id="${x.id}">
+      <h4>${esc(x.name)}</h4>
+      ${Math.abs(x.opening) > 0.5 ? `<div class="l">${t("b_open")} <b>${money(x.opening)}</b></div>` : ""}
+      <div class="l">${t("b_buy")} <b class="kbuy">${money(x.buy)}</b></div>
+      <div class="l">${t("b_pay")} <b class="kpay">${money(x.pay)}</b></div>
+      <div class="debt"><span>${t("b_debt")}</span><b class="${debtCls(x.closing)}">${debtTxt(x.closing)}</b></div>
+      ${x.closing > 0.5 && x.active ? `<button class="paybtn" data-pay="${x.id}">${t("b_paybtn")}</button>` : ""}</div>`).join("") + `</div>`;
+  if (!m) {
+    const mn = MON().map(s => s.slice(0, 3));
+    h += `<div class="card"><h3>${t("b_months")}</h3><div class="md" style="overflow-x:auto"><table class="mtab"><tr><th>${t("b_sup")}</th>${mn.map(s => `<th>${s}</th>`).join("")}<th>Σ</th></tr>
+      ${d.suppliers.map(x => `<tr><td><b>${esc(x.name)}</b></td>${x.months.map(v => `<td>${v ? fmt(v) : "·"}</td>`).join("")}<td><b>${fmt(x.buy)}</b></td></tr>`).join("")}
+      <tr><td><b>Σ</b></td>${T.months.map(v => `<td><b>${v ? fmt(v) : "·"}</b></td>`).join("")}<td><b>${fmt(T.buy)}</b></td></tr></table></div></div>`;
+  }
+  const recs = d.records.filter(r => !bFilter || r.supplier_id === bFilter);
+  const fname = bFilter ? (d.suppliers.find(x => x.id === bFilter) || {}).name : t("b_all_sup");
+  h += `<div class="card"><h3>${t("b_journal")} · ${esc(fname)} <small>(${recs.length} ${t("b_records")})</small>
+      ${bFilter ? `<button class="copy" style="float:right" id="bAll">${t("b_all_sup")}</button>` : ""}</h3>` + (recs.length ? `<div class="md" style="overflow-x:auto"><table>
+    <tr><th>${t("date")}</th><th>${t("b_sup")}</th><th>${t("b_type")}</th><th>${t("point")}</th><th style="text-align:right">${t("b_amt")}</th><th>${t("st_note")}</th><th></th></tr>
+    ${recs.map(r => `<tr><td>${r.day.slice(8, 10)}.${r.day.slice(5, 7)}.${r.day.slice(0, 4)}</td><td><b>${esc(r.supplier || "?")}</b></td>
+      <td>${r.kind === "buy" ? t("b_k_buy") : t("b_k_pay")}</td><td>${esc(r.point || "—")}</td>
+      <td style="text-align:right" class="${r.kind === "buy" ? "kbuy" : "kpay"}"><b>${r.kind === "pay" ? "−" : ""}${fmt(r.amount)} ₸</b></td><td>${esc(r.note || "")}</td>
+      <td class="st-act"><button data-be="${r.id}" title="${t("st_edit")}">✎</button><button data-bd="${r.id}" title="${t("st_del")}">🗑</button></td></tr>`).join("")}
+  </table></div>` : `<small>${t("b_empty")}</small>`) + `</div>`;
+  h += `<div class="card"><h3>${t("b_sups")}</h3>${BSUPS.filter(s => s.active).map(s => `<div class="suprow"><span><b>${esc(s.name)}</b></span>
+      <span class="st-act" style="flex:0;white-space:nowrap"><button data-sr="${s.id}" title="${t("st_edit")}">✎</button><button data-sd="${s.id}" title="${t("b_del_sup")}">🗑</button></span></div>`).join("")}
+    <div class="supadd"><input type="text" id="bNewSup" placeholder="${t("b_add_sup")}"><button class="main" id="bAddSup" style="padding:8px 14px">${t("b_add")}</button></div></div>`;
+  $("#buyBox").innerHTML = h;
+  document.querySelectorAll(".sup").forEach(e => e.onclick = ev => { if (ev.target.dataset.pay) return; bFilter = bFilter === +e.dataset.id ? 0 : +e.dataset.id; renderBuy(); });
+  document.querySelectorAll("[data-pay]").forEach(b => b.onclick = () => { const x = d.suppliers.find(s => s.id === +b.dataset.pay); bReset(); bSetKind("pay");
+    $("#bSup").value = x.id; $("#bAmt").value = Math.round(x.closing); $("#bDay").value = todayISO(); $("#bAmt").focus(); window.scrollTo({top: $("#buy").offsetTop - 80, behavior: "smooth"}); });
+  if ($("#bAll")) $("#bAll").onclick = () => { bFilter = 0; renderBuy(); };
+  document.querySelectorAll("[data-bd]").forEach(b => b.onclick = async () => { if (!confirm(t("b_confirm") + "?")) return;
+    try { await bApi("/api/purchases/" + b.dataset.bd, "DELETE"); loadBuy(); } catch (e) { alert(e.message); } });
+  document.querySelectorAll("[data-be]").forEach(b => b.onclick = () => { const r = d.records.find(x => x.id === +b.dataset.be); bEdit = r.id; bSetKind(r.kind);
+    $("#bSup").value = r.supplier_id; $("#bDay").value = r.day; $("#bPt").value = r.point || ""; $("#bAmt").value = r.amount; $("#bNote").value = r.note || "";
+    $("#bSave").textContent = t("st_btn_save"); $("#bFormTitle").textContent = t("b_edit"); $("#bCancel").style.display = ""; window.scrollTo({top: $("#buy").offsetTop - 80, behavior: "smooth"}); });
+  document.querySelectorAll("[data-sr]").forEach(b => b.onclick = async () => { const s = BSUPS.find(x => x.id === +b.dataset.sr); const n = prompt(t("b_rename"), s.name); if (!n || !n.trim()) return;
+    try { await bApi("/api/suppliers/" + s.id, "PUT", {name: n.trim(), active: true}); loadBuy(); } catch (e) { alert(e.message); } });
+  document.querySelectorAll("[data-sd]").forEach(b => b.onclick = async () => { const s = BSUPS.find(x => x.id === +b.dataset.sd); if (!confirm(t("b_del_sup") + " «" + s.name + "»?")) return;
+    try { await bApi("/api/suppliers/" + s.id, "DELETE"); if (bFilter === s.id) bFilter = 0; loadBuy(); } catch (e) { alert(e.message); } });
+  $("#bAddSup").onclick = async () => { const n = $("#bNewSup").value.trim(); if (!n) return; try { await bApi("/api/suppliers", "POST", {name: n}); loadBuy(); } catch (e) { alert(e.message); } };
+  $("#bNewSup").onkeydown = e => e.key === "Enter" && $("#bAddSup").click();
+}
+async function bApi(url, method = "GET", body){
+  const r = await fetch(url, {method, headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || r.statusText); return j;
+}
+function bReset(){ bEdit = null; $("#bAmt").value = ""; $("#bNote").value = ""; $("#bSave").textContent = t("st_btn_add"); $("#bFormTitle").textContent = t("b_new"); $("#bCancel").style.display = "none"; }
+$("#bCancel").onclick = () => { bReset(); bSetKind("buy"); };
+$("#bSave").onclick = async () => {
+  const msg = $("#bMsg"); msg.className = ""; msg.textContent = "";
+  if (!$("#bSup").value) { msg.className = "err"; msg.textContent = t("b_choose"); $("#bSup").focus(); return; }
+  const amt = parseFloat($("#bAmt").value); if (!(amt > 0)) { msg.className = "err"; msg.textContent = t("b_bad_amt"); $("#bAmt").focus(); return; }
+  const body = {supplier_id: +$("#bSup").value, kind: bKind, amount: amt, day: $("#bDay").value || todayISO(), point: $("#bPt").value, note: $("#bNote").value};
+  try { await bApi(bEdit ? "/api/purchases/" + bEdit : "/api/purchases", bEdit ? "PUT" : "POST", body); bReset(); bSetKind("buy"); msg.textContent = t("b_saved"); setTimeout(() => msg.textContent = "", 2500); loadBuy(); }
+  catch (e) { msg.className = "err"; msg.textContent = e.message; }
+};
+$("#bAmt").onkeydown = $("#bNote").onkeydown = e => e.key === "Enter" && $("#bSave").click();
+["#bYear", "#bMonth", "#bPoint"].forEach(s => $(s).onchange = () => loadBuy());
+$("#bPdf").onclick = () => { window.location.href = "/api/purchases/pdf?" + bQuery() + "&lang=" + LANG; };
 $("#stFilter").onchange = renderStock; $("#stSearch").oninput = renderStock;
 $("#stAsk").onclick = () => {
   document.querySelector('nav button[data-tab="hq"]').click();
