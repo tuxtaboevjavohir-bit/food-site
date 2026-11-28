@@ -653,10 +653,15 @@ def purchase_day_save(day: str, cells: dict) -> int:
     return len(rows)
 
 
-def purchase_report(year: int, month: int = 0, point: str = "") -> dict:
+def purchase_report(year: int, month: int = 0, point: str = "", day: str = "") -> dict:
     """Отчёт по поставщикам за год (month=0) или за месяц.
     Долг считается накопительно: долг на начало + закуп − оплачено = долг на конец."""
-    if month:
+    if day:  # отчёт за один день
+        d0 = datetime.strptime(day, "%Y-%m-%d")
+        from datetime import timedelta
+        start, end = d0.strftime("%Y-%m-%d"), (d0 + timedelta(days=1)).strftime("%Y-%m-%d")
+        year, month = d0.year, d0.month
+    elif month:
         start = f"{year:04d}-{month:02d}-01"
         end = f"{year + (month == 12):04d}-{month % 12 + 1:02d}-01"
     else:
@@ -707,7 +712,7 @@ def purchase_report(year: int, month: int = 0, point: str = "") -> dict:
             d["cells"][str(r["supplier_id"])] = d["cells"].get(str(r["supplier_id"]), 0) + r["amount"]
             d["total"] += r["amount"]
     pm = sorted(pm.values(), key=lambda d: (d["month"], order.get(d["point"], 99)))
-    return {"year": year, "month": month, "point": point, "from": start, "to": end,
+    return {"year": year, "month": month, "point": point, "day": day, "from": start, "to": end,
             "suppliers": out, "totals": tot, "records": recs, "daily": daily, "point_months": pm}
 
 

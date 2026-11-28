@@ -83,7 +83,8 @@ def build(rep: dict, lang: str = "ru") -> bytes:
     pdf.set_xy(31, 9)
     pdf.set_font("dv", "B", 18)
     pdf.set_text_color(*DARK)
-    period = f"{T['mfull'][month - 1]} {year}" if month else f"{year} {T['year']}"
+    dd = rep.get("day")
+    period = f"{dd[8:10]}.{dd[5:7]}.{dd[:4]}" if dd else f"{T['mfull'][month - 1]} {year}" if month else f"{year} {T['year']}"
     pdf.cell(0, 8, f"{T['title']} — {period}")
     pdf.set_xy(31, 18)
     pdf.set_font("dv", "", 9)
@@ -132,6 +133,19 @@ def build(rep: dict, lang: str = "ru") -> bytes:
         return bytes(pdf.output())
 
     # ---- поставщики × точки ----
+    if dd:  # отчёт за день: та же таблица, точки — строки (как в кассовой таблице закупа)
+        title(T["sp_pt"])
+        nw = max(16.0, (W - 40 - 28) / max(1, len(sup_cols)))
+        dc = [(T["point"], 40, "L")] + [(x["name"][:16], nw, "R") for x in sup_cols] + [(T["total"], 28, "R")]
+        head(dc)
+        cs = {str(x["id"]): 0.0 for x in sup_cols}
+        for i, r in enumerate(daily):
+            vals = [r["cells"].get(str(x["id"]), 0) for x in sup_cols]
+            for x, v in zip(sup_cols, vals):
+                cs[str(x["id"])] += v
+            row([r["point"] or "—"] + [money(v) if v else "·" for v in vals] + [money(r["total"])], dc, i, colors={len(dc) - 1: ACC}, size=9)
+        row([T["total"]] + [money(cs[str(x["id"])]) for x in sup_cols] + [money(sum(cs.values()))], dc, 0, bold=True, size=9)
+        return bytes(pdf.output())
     title(T["sp_pt"])
     by = {(str(x["id"]), p): 0.0 for x in sup_cols for p in pts}
     for r in daily:
