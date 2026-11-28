@@ -189,6 +189,8 @@
   .hrow{cursor:pointer}.hrow:hover td,.hrow.on td{background:#0e244088}
   details.card summary{cursor:pointer;list-style:none}details.card summary::-webkit-details-marker{display:none}
   .editbar{margin-top:10px;padding:8px 12px;border-radius:10px;background:#422006aa;border:1px solid #f59e0b88;color:#fde68a;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pdfbtn{margin-left:8px;background:none;border:1px solid #22d3ee66;color:#67e8f9;border-radius:7px;padding:2px 8px;cursor:pointer;font:inherit;font-size:12px}
+  .pdfbtn:hover{background:#22d3ee22}
   .supadd{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
   .suprow{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
   .suprow span{flex:1}
@@ -462,6 +464,7 @@ const I18N = {
     d_replace:"За {d} уже есть сохранённый закуп. Заменить его суммами, которые вы ввели?\n\nOK — заменить, Отмена — открыть сохранённое за {d}.", d_empty_save:"Таблица за {d} пустая. Сохранить пустой день (сохранённое за эту дату удалится)?",
     d_pdf:"📄 PDF за день", d_pdf_unsaved:"Есть несохранённые изменения — в PDF попадёт то, что сохранено. Продолжить?", h_edit:"Исправить",
     d_editing:"Открыт сохранённый закуп за {d}. Исправьте суммы и нажмите «Сохранить» — день перезапишется.", d_del:"Удалить день", d_del_q:"Удалить весь закуп за {d}?", d_deleted:"удалён",
+    h_search:"Поиск даты: 27 или 27.11", h_notfound:"За «{q}» ничего не сохранено.",
     sh_checks:"чеков", sh_total:"Все точки", sh_share:"доля выручки",
     tab_buy:"Закуп", buy_h:"Закуп и оплаты поставщикам", b_pdf:"📄 Скачать PDF", b_new:"Новая запись", b_edit:"Изменить запись", b_k_buy:"📦 Закуп", b_k_pay:"💳 Оплата",
     b_amt:"Сумма, ₸", b_note:"Комментарий (накладная, что привезли)", b_hint:"«Закуп» — сколько привёз поставщик (долг растёт). «Оплата» — сколько вы ему заплатили (долг уменьшается).",
@@ -545,6 +548,7 @@ const I18N = {
     d_replace:"{d} күніне сақталған сатып алу бар. Оны енгізген сомаларыңызбен ауыстыру керек пе?\n\nOK — ауыстыру, Болдырмау — {d} сақталғанын ашу.", d_empty_save:"{d} кестесі бос. Бос күнді сақтау керек пе (осы күнгі сақталған өшеді)?",
     d_pdf:"📄 Күндік PDF", d_pdf_unsaved:"Сақталмаған өзгерістер бар — PDF-ке сақталғаны түседі. Жалғастыру керек пе?", h_edit:"Түзету",
     d_editing:"{d} күнгі сақталған сатып алу ашық. Сомаларды түзетіп, «Сақтау» басыңыз — күн қайта жазылады.", d_del:"Күнді өшіру", d_del_q:"{d} күнгі барлық сатып алуды өшіру керек пе?", d_deleted:"өшірілді",
+    h_search:"Күнді іздеу: 27 немесе 27.11", h_notfound:"«{q}» бойынша ештеңе сақталмаған.",
     sh_checks:"чек", sh_total:"Барлық нүктелер", sh_share:"түсім үлесі",
     tab_buy:"Сатып алу", buy_h:"Жеткізушілерден сатып алу және төлемдер", b_pdf:"📄 PDF жүктеу", b_new:"Жаңа жазба", b_edit:"Жазбаны өзгерту", b_k_buy:"📦 Сатып алу", b_k_pay:"💳 Төлем",
     b_amt:"Сома, ₸", b_note:"Түсініктеме (жүкқұжат, не әкелді)", b_hint:"«Сатып алу» — жеткізуші қанша әкелді (қарыз өседі). «Төлем» — сіз қанша төледіңіз (қарыз азаяды).",
@@ -1178,14 +1182,38 @@ function histDays(){ // {день: {cells: {точка: {sid: сумма}}, pts:
     d.pts[r.point] = (d.pts[r.point] || 0) + r.total; d.total += r.total; });
   return days;
 }
+let HSEARCH = "", hTimer = null;
+const hNorm = v => String(v || "").trim().replace(/[\/,\-\s]+/g, ".").replace(/\.+$/, "");
+async function hFind(openFirst){
+  const q = hNorm(HSEARCH);
+  // полная дата (дд.мм или дд.мм.гггг) из другого месяца — переключаем месяц и год
+  // пока печатаете — только полная форма (27.11 или 27.11.2026); по Enter — любая (27.1)
+  const m = openFirst ? q.match(/^(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?$/) : q.match(/^(\d{1,2})\.(\d{2})(?:\.(\d{4}))?$/);
+  if (m) {
+    const dd = m[1].padStart(2, "0"), mm = +m[2], yy = m[3] ? (m[3].length === 2 ? "20" + m[3] : m[3]) : $("#bYear").value;
+    if (mm >= 1 && mm <= 12 && ($("#bYear").value !== yy || ($("#bMonth").value !== "0" && +$("#bMonth").value !== mm))) {
+      if (![...$("#bYear").options].some(o => o.value === yy)) $("#bYear").add(new Option(yy, yy));
+      $("#bYear").value = yy; $("#bMonth").value = String(mm); await loadBuyDays();
+    } else renderBuyDays();
+    HSEARCH = `${dd}.${String(mm).padStart(2, "0")}` + (m[3] ? "." + yy : "");
+  } else renderBuyDays();
+  const inp = $("#hSearch"); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
+  const first = document.querySelector(".hrow");
+  if (first && document.querySelectorAll(".hrow").length === 1) { first.classList.add("new-flash"); if (openFirst) first.click(); }
+  else if (first && openFirst) first.click();
+}
 function renderBuyDays(){
   const days = histDays(), keys = Object.keys(days).sort().reverse();
   const pts = [...new Set([...(DAY ? DAY.points : []), ...(BUY.daily || []).map(r => r.point)])].filter(p => keys.some(k => days[k].pts[p] !== undefined) || (DAY && DAY.points.includes(p)));
-  const sumPts = {}; let sumAll = 0; keys.forEach(k => { pts.forEach(p => sumPts[p] = (sumPts[p] || 0) + (days[k].pts[p] || 0)); sumAll += days[k].total; });
-  let h = `<div class="card"><h3>${t("h_days")} <small>(${t("h_click")})</small></h3>` + (keys.length ? `<div class="md" style="overflow-x:auto"><table class="htab">
+  const sumPts = {}; let sumAll = 0; (hNorm($("#hSearch")?.value || HSEARCH) ? keys.filter(k => dmy(k).includes(hNorm($("#hSearch")?.value || HSEARCH)) || k.includes(hNorm($("#hSearch")?.value || HSEARCH))) : keys).forEach(k => { pts.forEach(p => sumPts[p] = (sumPts[p] || 0) + (days[k].pts[p] || 0)); sumAll += days[k].total; });
+  const q = hNorm($("#hSearch")?.value || HSEARCH);
+  const shown = q ? keys.filter(k => dmy(k).includes(q) || k.includes(q)) : keys;
+  let h = `<div class="card"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><h3 style="margin:0">${t("h_days")} <small>(${t("h_click")})</small></h3>
+    <input type="search" id="hSearch" class="dinp" style="width:290px;max-width:100%" placeholder="🔍 ${t("h_search")}" value="${esc(HSEARCH)}" autocomplete="off"></div>
+    ${q && !shown.length ? `<small class="err">${t("h_notfound").replace("{q}", esc(HSEARCH))}</small>` : ""}` + (keys.length ? `<div class="md" style="overflow-x:auto"><table class="htab">
     <tr><th>${t("date")}</th>${pts.map(p => `<th>${esc(p)}</th>`).join("")}<th>${t("d_total")}</th><th></th></tr>
-    ${keys.map(k => `<tr class="hrow ${DAY && DAY.day === k ? "on" : ""}" data-d="${k}"><td><b>${dmy(k)}</b></td>${pts.map(p => `<td>${days[k].pts[p] ? fmt(days[k].pts[p]) : "·"}</td>`).join("")}<td class="tt">${fmt(days[k].total)}</td>
-      <td class="st-act" style="white-space:nowrap"><button data-open="${k}" title="${t("h_edit")}">✏️</button><button data-pdf="${k}" title="PDF">📄</button><button data-wa="${k}" title="WhatsApp">🟢</button><button data-del="${k}" title="${t("d_del")}">🗑</button></td></tr>`).join("")}
+    ${shown.map(k => `<tr class="hrow ${DAY && DAY.day === k ? "on" : ""}" data-d="${k}"><td style="white-space:nowrap"><b>${dmy(k)}</b> <button class="pdfbtn" data-pdf="${k}">📄 PDF</button></td>${pts.map(p => `<td>${days[k].pts[p] ? fmt(days[k].pts[p]) : "·"}</td>`).join("")}<td class="tt">${fmt(days[k].total)}</td>
+      <td class="st-act" style="white-space:nowrap"><button data-open="${k}" title="${t("h_edit")}">✏️</button><button data-wa="${k}" title="WhatsApp">🟢</button><button data-del="${k}" title="${t("d_del")}">🗑</button></td></tr>`).join("")}
     <tr class="sum"><td><b>${t("d_total")}</b></td>${pts.map(p => `<td><b>${fmt(sumPts[p])}</b></td>`).join("")}<td class="tt">${fmt(sumAll)}</td><td></td></tr>
   </table></div>` : `<small>${t("h_empty")}</small>`) + `</div>`;
   h += `<details class="card"><summary><b>${t("b_sups")}</b> <small>(${t("h_sups_hint")})</small></summary>
@@ -1197,6 +1225,9 @@ function renderBuyDays(){
     window.scrollTo({top: $("#buy").offsetTop - 80, behavior: "smooth"}); };
   document.querySelectorAll(".hrow").forEach(tr => tr.onclick = e => { const b = e.target.closest("button"); if (!b || b.dataset.open) openDay(tr.dataset.d); });
   document.querySelectorAll("[data-pdf]").forEach(b => b.onclick = e => { e.stopPropagation(); dayPdf(b.dataset.pdf); });
+  const hs = $("#hSearch");
+  hs.oninput = () => { HSEARCH = hs.value; clearTimeout(hTimer); hTimer = setTimeout(hFind, 350); };
+  hs.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); clearTimeout(hTimer); hFind(true); } };
   document.querySelectorAll("[data-del]").forEach(b => b.onclick = e => { e.stopPropagation(); delDay(b.dataset.del); });
   document.querySelectorAll("[data-wa]").forEach(b => b.onclick = e => { e.stopPropagation(); const d = days[b.dataset.wa];
     sendWA(dayText(b.dataset.wa, d.cells, BSUPS, pts)); });

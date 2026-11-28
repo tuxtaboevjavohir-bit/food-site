@@ -22,7 +22,7 @@ import whatsapp  # noqa: E402
 from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
-APP_VERSION = "2026-11-28.14"
+APP_VERSION = "2026-11-28.15"
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
