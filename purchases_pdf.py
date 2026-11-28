@@ -11,24 +11,24 @@ L = {
     "ru": {
         "title": "Отчёт по закупу", "year": "год", "all": "Все точки", "point": "Точка", "made": "Сформирован",
         "sup": "Поставщик", "open": "Долг на начало", "buy": "Закуп", "pay": "Оплачено", "debt": "К оплате",
-        "total": "ИТОГО", "summary": "Сводка по поставщикам", "bymonth": "Закуп по месяцам, ₸",
+        "total": "ИТОГО", "summary": "Сводка по поставщикам", "bymonth": "Закуп по месяцам, ₸", "sp_pt": "Закуп по поставщикам и точкам, ₸",
         "paymonth": "Оплаты по месяцам, ₸", "journal": "Журнал записей", "date": "Дата", "type": "Тип",
         "sum": "Сумма, ₸", "note": "Комментарий", "t_buy": "Закуп", "t_pay": "Оплата", "empty": "За этот период записей нет.",
         "hint": "К оплате = долг на начало + закуп − оплачено. Минус означает переплату (аванс).",
         "months": ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"],
         "mfull": ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"],
-        "page": "Стр.", "daily": "Закуп по дням (по точкам), ₸", "pm": "Закуп по месяцам и точкам, ₸", "month": "Месяц", "dtotal": "Итого", "rev": "Выручка", "pct": "Закуп %", "bypt": "По точкам: закуп и выручка (по сменам)",
+        "page": "Стр.", "daily": "Закуп по дням, ₸", "pm": "Закуп по месяцам и точкам, ₸", "month": "Месяц", "dtotal": "Итого", "rev": "Выручка", "pct": "Закуп %", "bypt": "По точкам: закуп и выручка (по сменам)",
     },
     "kk": {
         "title": "Сатып алу есебі", "year": "жыл", "all": "Барлық нүктелер", "point": "Нүкте", "made": "Жасалды",
         "sup": "Жеткізуші", "open": "Басындағы қарыз", "buy": "Сатып алу", "pay": "Төленді", "debt": "Төлеу керек",
-        "total": "БАРЛЫҒЫ", "summary": "Жеткізушілер бойынша қорытынды", "bymonth": "Айлар бойынша сатып алу, ₸",
+        "total": "БАРЛЫҒЫ", "summary": "Жеткізушілер бойынша қорытынды", "bymonth": "Айлар бойынша сатып алу, ₸", "sp_pt": "Жеткізушілер мен нүктелер бойынша сатып алу, ₸",
         "paymonth": "Айлар бойынша төлемдер, ₸", "journal": "Жазбалар журналы", "date": "Күні", "type": "Түрі",
         "sum": "Сома, ₸", "note": "Түсініктеме", "t_buy": "Сатып алу", "t_pay": "Төлем", "empty": "Бұл кезеңде жазба жоқ.",
         "hint": "Төлеу керек = басындағы қарыз + сатып алу − төленді. Минус — артық төлем (аванс).",
         "months": ["Қаң", "Ақп", "Нау", "Сәу", "Мам", "Мау", "Шіл", "Там", "Қыр", "Қаз", "Қар", "Жел"],
         "mfull": ["Қаңтар", "Ақпан", "Наурыз", "Сәуір", "Мамыр", "Маусым", "Шілде", "Тамыз", "Қыркүйек", "Қазан", "Қараша", "Желтоқсан"],
-        "page": "Бет", "daily": "Күндер бойынша сатып алу (нүктелер), ₸", "pm": "Айлар мен нүктелер бойынша сатып алу, ₸", "month": "Ай", "dtotal": "Барлығы", "rev": "Түсім", "pct": "Сатып алу %", "bypt": "Нүктелер бойынша: сатып алу және түсім (ауысымдар)",
+        "page": "Бет", "daily": "Күндер бойынша сатып алу, ₸", "pm": "Айлар мен нүктелер бойынша сатып алу, ₸", "month": "Ай", "dtotal": "Барлығы", "rev": "Түсім", "pct": "Сатып алу %", "bypt": "Нүктелер бойынша: сатып алу және түсім (ауысымдар)",
     },
 }
 
@@ -92,6 +92,7 @@ def build(rep: dict, lang: str = "ru") -> bytes:
     pdf.set_y(30)
 
     sups, tot = rep["suppliers"], rep["totals"]
+    daily = sorted(rep.get("daily", []), key=lambda r: r["day"])
 
     def head(cols):
         pdf.set_font("dv", "B", 8)
@@ -105,8 +106,7 @@ def build(rep: dict, lang: str = "ru") -> bytes:
         pdf.set_font("dv", "B" if bold else "", size)
         pdf.set_fill_color(*(HEAD if bold else ZEBRA if i % 2 else (255, 255, 255)))
         for j, (v, (_, w, al)) in enumerate(zip(vals, cols)):
-            c = (colors or {}).get(j, DARK)
-            pdf.set_text_color(*c)
+            pdf.set_text_color(*(colors or {}).get(j, DARK))
             pdf.cell(w, 6.5, v, border=0, align=al, fill=True)
         pdf.ln()
 
@@ -119,123 +119,65 @@ def build(rep: dict, lang: str = "ru") -> bytes:
         pdf.cell(0, 7, t)
         pdf.ln(8)
 
-    # ---- сводка ----
-    title(T["summary"])
-    cols = [(T["sup"], W * .32, "L"), (T["open"], W * .17, "R"), (T["buy"], W * .17, "R"),
-            (T["pay"], W * .17, "R"), (T["debt"], W * .17, "R")]
-    head(cols)
-    debt_color = lambda v: {4: RED if v > 0.5 else GREEN if v < -0.5 else DARK}
-    for i, x in enumerate(sups):
-        row([x["name"], money(x["opening"]), money(x["buy"]), money(x["pay"]), money(x["closing"])], cols, i,
-            colors=debt_color(x["closing"]))
-    row([T["total"], money(tot["opening"]), money(tot["buy"]), money(tot["pay"]), money(tot["closing"])], cols, 0,
-        bold=True, colors=debt_color(tot["closing"]))
-    pdf.set_font("dv", "", 7)
-    pdf.set_text_color(110, 120, 140)
-    pdf.cell(0, 6, T["hint"])
-    pdf.ln(4)
+    pts = []
+    for r in daily:
+        if r["point"] not in pts:
+            pts.append(r["point"])
+    sup_cols = [x for x in sups if x["buy"]] or [x for x in sups if x["active"]]
 
-    # ---- по месяцам (только годовой отчёт) ----
-    if not month:
-        for key, ttl in (("months", T["bymonth"]), ("months_pay", T["paymonth"])):
-            title(ttl)
-            nw = (W - 36 - 24) / 12
-            mc = [(T["sup"], 36, "L")] + [(m, nw, "R") for m in T["months"]] + [(T["total"], 24, "R")]
-            head(mc)
-            for i, x in enumerate(sups):
-                vals = [x["name"]] + [money(v) if v else "·" for v in x[key]] + [money(sum(x[key]))]
-                row(vals, mc, i, size=7)
-            row([T["total"]] + [money(v) if v else "·" for v in tot[key]] + [money(sum(tot[key]))], mc, 0, bold=True, size=7)
-
-    # ---- таблица точка × поставщик (как дневная таблица закупа) ----
-    sup_cols = [x for x in sups if x["buy"]] or sups
-
-    rev_on = rep.get("revenue_on")
-    pct = lambda b, r: f"{b / r * 100:.1f}%" if r and b else "·"
-
-    def grid(ttl, rows, first, firstw, label):
-        if not rows:
-            return
-        title(ttl)
-        pw = 26
-        extra = [(T["dtotal"], 20, "R")] + ([(T["rev"], 22, "R"), (T["pct"], 15, "R")] if rev_on else [])
-        nw = max(13.0, (W - firstw - pw - sum(e[1] for e in extra)) / max(1, len(sup_cols)))
-        gc = [(first, firstw, "L"), (T["point"], pw, "L")] + [(x["name"][:14], nw, "R") for x in sup_cols] + extra
-        head(gc)
-        sums = {str(x["id"]): 0.0 for x in sup_cols}
-        rsum = bsum = 0.0
-        prev = None
-        nb = 2 + len(sup_cols)
-        for i, r in enumerate(rows):
-            if pdf.get_y() > pdf.h - 20:
-                pdf.add_page()
-                head(gc)
-            lab = label(r)
-            vals = [lab if lab != prev else "", (r["point"] or "—")[:16]]
-            prev = lab
-            for x in sup_cols:
-                v = r["cells"].get(str(x["id"]), 0)
-                sums[str(x["id"])] += v
-                vals.append(money(v) if v else "·")
-            vals.append(money(r["total"]) if r["total"] else "·")
-            bsum += r["total"]
-            if rev_on:
-                rv = r.get("rev", (r.get("revenue") or {}).get("total", 0.0))
-                rsum += rv
-                vals += [money(rv) if rv else "·", pct(r["total"], rv)]
-            row(vals, gc, i, size=7, colors={nb: ACC})
-        tail = [money(bsum)] + ([money(rsum), pct(bsum, rsum)] if rev_on else [])
-        row([T["dtotal"], ""] + [money(sums[str(x["id"])]) for x in sup_cols] + tail, gc, 0, bold=True, size=7)
-
-    if rev_on and rep.get("by_point"):
-        title(T["bypt"])
-        bc = [(T["point"], W * .4, "L"), (T["buy"], W * .2, "R"), (T["rev"], W * .2, "R"), (T["pct"], W * .2, "R")]
-        head(bc)
-        bp = [(p, x) for p, x in rep["by_point"].items() if p]
-        for i, (p, x) in enumerate(bp):
-            row([p, money(x["buy"]), money(x["revenue"]), pct(x["buy"], x["revenue"])], bc, i)
-        tb, tr = sum(x["buy"] for _, x in bp), sum(x["revenue"] for _, x in bp)
-        row([T["total"], money(tb), money(tr), pct(tb, tr)], bc, 0, bold=True)
-
-    if not month:
-        pm = {(r["month"], r["point"]): dict(r, rev=0.0) for r in rep.get("point_months", [])}
-        for r in rep.get("daily", []):
-            k = (int(r["day"][5:7]), r["point"])
-            rv = (r.get("revenue") or {}).get("total", 0.0)
-            if rv:
-                pm.setdefault(k, {"month": k[0], "point": k[1], "cells": {}, "total": 0.0, "rev": 0.0})["rev"] += rv
-        order = {}
-        for r in rep.get("daily", []):
-            order.setdefault(r["point"], len(order))
-        pm_rows = sorted(pm.values(), key=lambda r: (r["month"], order.get(r["point"], 0)))
-        grid(T["pm"], pm_rows, T["month"], 24, lambda r: T["mfull"][r["month"] - 1])
-    daily = sorted(rep.get("daily", []), key=lambda r: r["day"])
-    grid(T["daily"], daily, T["date"], 22, lambda r: f"{r['day'][8:10]}.{r['day'][5:7]}.{r['day'][:4]}")
-
-    # ---- журнал ----
-    title(T["journal"])
-    recs = rep["records"]
-    if not recs:
-        pdf.set_font("dv", "", 9)
+    if not daily:
+        pdf.set_font("dv", "", 10)
         pdf.set_text_color(110, 120, 140)
-        pdf.cell(0, 6, T["empty"])
-    else:
-        jc = [(T["date"], W * .11, "L"), (T["sup"], W * .2, "L"), (T["type"], W * .11, "L"),
-              (T["point"], W * .17, "L"), (T["sum"], W * .13, "R"), (T["note"], W * .28, "L")]
-        by = {}
-        for r in recs:
-            by.setdefault(r["supplier"] or "?", []).append(r)
-        head(jc)
-        i = 0
-        for name in [x["name"] for x in sups if x["name"] in by] + [n for n in by if n not in {x["name"] for x in sups}]:
-            for r in sorted(by[name], key=lambda r: (r["day"], r["id"])):
-                if pdf.get_y() > pdf.h - 20:
-                    pdf.add_page()
-                    head(jc)
-                d = r["day"]
-                is_buy = r["kind"] == "buy"
-                note = (r.get("note") or "")[:60]
-                row([f"{d[8:10]}.{d[5:7]}.{d[:4]}", name, T["t_buy"] if is_buy else T["t_pay"], r.get("point") or "—",
-                     money(r["amount"]), note], jc, i, colors={2: DARK if is_buy else GREEN, 4: DARK if is_buy else GREEN})
-                i += 1
+        pdf.cell(0, 8, T["empty"])
+        return bytes(pdf.output())
+
+    # ---- поставщики × точки ----
+    title(T["sp_pt"])
+    by = {(str(x["id"]), p): 0.0 for x in sup_cols for p in pts}
+    for r in daily:
+        for k, v in r["cells"].items():
+            if (k, r["point"]) in by:
+                by[(k, r["point"])] += v
+    pw = min(45.0, (W - 60 - 30) / max(1, len(pts)))
+    sc = [(T["sup"], 60, "L")] + [(p[:22] or "—", pw, "R") for p in pts] + [(T["total"], 30, "R")]
+    head(sc)
+    for i, x in enumerate(sup_cols):
+        vals = [by[(str(x["id"]), p)] for p in pts]
+        row([x["name"]] + [money(v) if v else "·" for v in vals] + [money(sum(vals))], sc, i, colors={len(sc) - 1: ACC})
+    ptot = [sum(by[(str(x["id"]), p)] for x in sup_cols) for p in pts]
+    row([T["total"]] + [money(v) for v in ptot] + [money(sum(ptot))], sc, 0, bold=True)
+
+    # ---- по месяцам (годовой отчёт) ----
+    if not month:
+        title(T["bymonth"])
+        nw = (W - 36 - 24) / 12
+        mc = [(T["sup"], 36, "L")] + [(m, nw, "R") for m in T["months"]] + [(T["total"], 24, "R")]
+        head(mc)
+        for i, x in enumerate(sup_cols):
+            row([x["name"]] + [money(v) if v else "·" for v in x["months"]] + [money(sum(x["months"]))], mc, i, size=7)
+        row([T["total"]] + [money(v) if v else "·" for v in tot["months"]] + [money(sum(tot["months"]))], mc, 0, bold=True, size=7)
+
+    # ---- по дням: дата × точка × поставщик ----
+    title(T["daily"])
+    gw = 26
+    nw = max(13.0, (W - 22 - gw - 22) / max(1, len(sup_cols)))
+    gc = [(T["date"], 22, "L"), (T["point"], gw, "L")] + [(x["name"][:14], nw, "R") for x in sup_cols] + [(T["dtotal"], 22, "R")]
+    head(gc)
+    sums = {str(x["id"]): 0.0 for x in sup_cols}
+    prev = None
+    for i, r in enumerate(daily):
+        if pdf.get_y() > pdf.h - 20:
+            pdf.add_page()
+            head(gc)
+            prev = None
+        lab = f"{r['day'][8:10]}.{r['day'][5:7]}.{r['day'][:4]}"
+        vals = [lab if lab != prev else "", (r["point"] or "—")[:16]]
+        prev = lab
+        for x in sup_cols:
+            v = r["cells"].get(str(x["id"]), 0)
+            sums[str(x["id"])] += v
+            vals.append(money(v) if v else "·")
+        vals.append(money(r["total"]))
+        row(vals, gc, i, size=7, colors={len(gc) - 1: ACC})
+    row([T["dtotal"], ""] + [money(sums[str(x["id"])]) for x in sup_cols] + [money(sum(sums.values()))], gc, 0, bold=True, size=7)
     return bytes(pdf.output())

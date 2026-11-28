@@ -184,6 +184,10 @@
   .sh-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));box-shadow:0 0 8px #22d3ee88}
   .sh-bot{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;color:var(--mute)}
   .sh-bot b{font-size:16px;color:var(--txt)}
+  .htab td,.htab th{text-align:right;white-space:nowrap}.htab td:first-child,.htab th:first-child{text-align:left}
+  .htab td.tt{color:#67e8f9;font-weight:700}
+  .hrow{cursor:pointer}.hrow:hover td,.hrow.on td{background:#0e244088}
+  details.card summary{cursor:pointer;list-style:none}details.card summary::-webkit-details-marker{display:none}
   .supadd{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
   .suprow{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
   .suprow span{flex:1}
@@ -291,16 +295,16 @@
   <!-- ЗАКУП -->
   <section id="buy" class="tab">
     <div class="row" id="buyBar" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-      <h2 style="margin:0" data-i18n="buy_h">Закуп и оплаты поставщикам</h2>
+      <h2 style="margin:0" data-i18n="tab_buy">Закуп</h2>
       <div class="row" style="flex-wrap:wrap;gap:8px">
-        <select id="bYear"></select><select id="bMonth"></select><select id="bPoint"></select>
+        <select id="bYear"></select><select id="bMonth"></select>
         <button class="main" id="bPdf" style="padding:8px 14px" data-i18n="b_pdf">📄 Скачать PDF</button>
       </div>
     </div>
     <div class="card" id="dayCard">
       <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
         <h3 style="margin:0" data-i18n="d_h">🗓 Закуп за день</h3>
-        <div class="row" style="gap:8px;flex-wrap:wrap"><input type="date" id="dDay" class="dinp"><span id="dSaved" style="font-size:12px;color:var(--mute)"></span></div>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><span id="dSaved" style="font-size:12px;color:#34d399"></span><input type="date" id="dDay" class="dinp"></div>
       </div>
       <div class="split">
         <b data-i18n="sp_h">➗ Разделить сумму по точкам:</b>
@@ -317,26 +321,9 @@
         <button class="copy" style="float:none;color:#4ade80" id="dWa" data-i18n="d_wa">🟢 Отправить в WhatsApp</button>
         <span id="dMsg"></span>
       </div>
-      <small data-i18n="d_hint">Каждый день вписывайте суммы закупа по точкам и нажмите «Сохранить». Можно открыть любую дату и исправить — сохранится заново.</small>
-    </div>
-    <div class="card">
-      <h3 id="bFormTitle" data-i18n="b_new">Новая запись</h3>
-      <div class="bform">
-        <div class="seg" id="bKind"><button data-k="buy" class="on" data-i18n="b_k_buy">📦 Закуп</button><button data-k="pay" data-i18n="b_k_pay">💳 Оплата</button></div>
-        <select id="bSup"></select>
-        <input type="date" id="bDay">
-        <select id="bPt"></select>
-        <input type="text" inputmode="decimal" id="bAmt" autocomplete="off" data-i18n-ph="b_amt" placeholder="Сумма, ₸">
-        <input type="text" id="bNote" data-i18n-ph="b_note" placeholder="Комментарий (накладная, что привезли)">
-        <button class="main" id="bSave" style="padding:10px 16px" data-i18n="st_btn_add">Добавить</button>
-        <button id="bCancel" class="copy" style="display:none;float:none" data-i18n="st_cancel">Отмена</button>
-      </div>
-      <small data-i18n="b_hint">«Закуп» — сколько привёз поставщик (долг растёт). «Оплата» — сколько вы ему заплатили (долг уменьшается).</small>
-      <div id="bMsg" style="margin-top:6px"></div>
     </div>
     <div id="buyBox"></div>
   </section>
-
   <!-- WHATSAPP -->
   <section id="wa" class="tab">
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:14px">
@@ -467,6 +454,7 @@ const I18N = {
     sp_h:"➗ Разделить сумму по точкам:", sp_amt:"Общая сумма, ₸", sp_by:"по выручке:", sp_b1:"за день", sp_b7:"за 7 дней по", sp_b30:"за 30 дней по", sp_go:"Разделить",
     sp_norev:"Нет выручки за этот период — делить не по чему. Выберите 7 или 30 дней.", sp_off:"Paloma не подключена — делить по выручке нельзя.", sp_done:"Разделено", sp_check:"Проверьте и нажмите «Сохранить день».",
     sp_choose:"Выберите поставщика и введите сумму",
+    h_days:"📅 Сохранённые дни", h_click:"нажмите на дату — откроется отчёт дня", h_open:"Открыть", h_empty:"Пока нет сохранённых дней.", h_sups_hint:"добавить, переименовать",
     sh_checks:"чеков", sh_total:"Все точки", sh_share:"доля выручки",
     tab_buy:"Закуп", buy_h:"Закуп и оплаты поставщикам", b_pdf:"📄 Скачать PDF", b_new:"Новая запись", b_edit:"Изменить запись", b_k_buy:"📦 Закуп", b_k_pay:"💳 Оплата",
     b_amt:"Сумма, ₸", b_note:"Комментарий (накладная, что привезли)", b_hint:"«Закуп» — сколько привёз поставщик (долг растёт). «Оплата» — сколько вы ему заплатили (долг уменьшается).",
@@ -545,6 +533,7 @@ const I18N = {
     sp_h:"➗ Соманы нүктелерге бөлу:", sp_amt:"Жалпы сома, ₸", sp_by:"түсім бойынша:", sp_b1:"бір күн", sp_b7:"7 күн, соңғысы", sp_b30:"30 күн, соңғысы", sp_go:"Бөлу",
     sp_norev:"Бұл кезеңде түсім жоқ. 7 немесе 30 күнді таңдаңыз.", sp_off:"Paloma қосылмаған — түсім бойынша бөлу мүмкін емес.", sp_done:"Бөлінді", sp_check:"Тексеріп, «Күнді сақтау» басыңыз.",
     sp_choose:"Жеткізушіні таңдап, соманы енгізіңіз",
+    h_days:"📅 Сақталған күндер", h_click:"күнді басыңыз — сол күннің есебі ашылады", h_open:"Ашу", h_empty:"Әзірге сақталған күн жоқ.", h_sups_hint:"қосу, атын өзгерту",
     sh_checks:"чек", sh_total:"Барлық нүктелер", sh_share:"түсім үлесі",
     tab_buy:"Сатып алу", buy_h:"Жеткізушілерден сатып алу және төлемдер", b_pdf:"📄 PDF жүктеу", b_new:"Жаңа жазба", b_edit:"Жазбаны өзгерту", b_k_buy:"📦 Сатып алу", b_k_pay:"💳 Төлем",
     b_amt:"Сома, ₸", b_note:"Түсініктеме (жүкқұжат, не әкелді)", b_hint:"«Сатып алу» — жеткізуші қанша әкелді (қарыз өседі). «Төлем» — сіз қанша төледіңіз (қарыз азаяды).",
@@ -1018,34 +1007,50 @@ $("#stSave").onclick = async () => {
   try { await stCall(stEdit ? "/api/stock/" + stEdit : "/api/stock", stEdit ? "PUT" : "POST", body); stReset(); } catch (e) { alert(e.message); }
 };
 $("#stName").onkeydown = $("#stQty").onkeydown = e => { if (e.key === "Enter") $("#stSave").click(); };
-// ---------- дневной закуп таблицей ----------
-let DAY = null, dDirty = false;
+// ---------- закуп: общие помощники ----------
+let BUY = null, BSUPS = [], DAY = null, dDirty = false;
+const MON = () => LANG === "kk" ? ["Қаңтар","Ақпан","Наурыз","Сәуір","Мамыр","Маусым","Шілде","Тамыз","Қыркүйек","Қазан","Қараша","Желтоқсан"] : ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const dmy = d => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
 const dNum = v => { const n = parseFloat(String(v).replace(/\s/g, "").replace(",", ".")); return isFinite(n) && n > 0 ? n : 0; };
+const fmtIn = v => { if (!v) return ""; const [a, b] = (Math.round(v * 100) / 100).toString().split("."); return a.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (b ? "," + b : ""); };
+function moneyInput(inp){
+  inp.addEventListener("input", () => {
+    const raw = inp.value.replace(/[^\d.,]/g, "").replace(",", "."), [a, b] = raw.split(".");
+    const v = (a || "").replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (b !== undefined ? "," + b.slice(0, 2) : "");
+    if (v !== inp.value) { const end = inp.value.length - inp.selectionEnd; inp.value = v; const pos = Math.max(0, v.length - end); inp.setSelectionRange(pos, pos); }
+  });
+}
+async function bApi(url, method = "GET", body){
+  const r = await fetch(url, {method, headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `${t("err_server")} (${r.status})`); return j;
+}
+function bQuery(){ return `year=${$("#bYear").value}&month=${$("#bMonth").value}`; }
+// текст отчёта дня для WhatsApp: cells = {точка: {id поставщика: сумма}}
+function dayText(day, cells, sups, points){
+  let txt = `🛒 Закуп Food house — ${dmy(day)}\n`, g = 0; const cs = {};
+  points.forEach(p => { const c = cells[p] || {}; const s = Object.values(c).reduce((a, b) => a + b, 0); if (!s) return; g += s;
+    txt += `\n📍 ${p}\n` + sups.filter(x => c[x.id]).map(x => `  ${x.name}: ${fmt(c[x.id])}`).join("\n") + `\n  ${t("d_total")}: ${fmt(s)} ₸\n`;
+    for (const k in c) cs[k] = (cs[k] || 0) + c[k]; });
+  txt += `\n📊 ${t("d_total")}:\n` + sups.filter(x => cs[x.id]).map(x => `  ${x.name}: ${fmt(cs[x.id])}`).join("\n") + `\n💰 ${fmt(g)} ₸`;
+  return txt;
+}
+const sendWA = txt => window.open("https://wa.me/?text=" + encodeURIComponent(txt), "_blank");
+async function copyText(txt){ try { await navigator.clipboard.writeText(txt); return true; } catch { prompt("", txt); return false; } }
+
+// ---------- закуп за день: таблица точки × поставщики ----------
 async function loadDay(){
   if (!$("#dDay").value) $("#dDay").value = todayISO();
-  const day = $("#dDay").value;
-  try { DAY = await bApi("/api/purchases/day?day=" + day); renderDay(); } catch (e) { $("#dMsg").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
-  try { const r = await bApi("/api/purchases/day?rev=1&day=" + day);
-    if ($("#dDay").value === day && DAY) { DAY.revenue = r.revenue; DAY.revenue_on = r.revenue_on; DAY.revenue_errors = r.revenue_errors; dRevCells(); } } catch {}
-}
-function dRevCells(){
-  const R = DAY.revenue || {}, on = DAY.revenue_on;
-  $("#dGrid").querySelectorAll("tr[data-p]").forEach(tr => { const v = R[DAY.points[+tr.dataset.p]];
-    tr.querySelector(".rev").innerHTML = !on ? "—" : v ? `<b>${fmt(v.total)}</b>${v.open ? ' <span title="' + t("d_open") + '">●</span>' : ""}<small>☀️ ${fmt(v.day)} · 🌙 ${fmt(v.night)}</small>` : `<small>${t("d_norev")}</small>`; });
-  const tot = Object.values(R).reduce((a, v) => a + v.total, 0);
-  $("#dRevAll").innerHTML = on ? `<b>${fmt(tot)}</b>` : "—";
-  if (DAY.revenue_errors && DAY.revenue_errors.length) $("#dMsg").innerHTML = `<small class="err">Paloma: ${esc(DAY.revenue_errors[0]).slice(0, 140)}</small>`;
-  dTotals();
+  try { DAY = await bApi("/api/purchases/day?day=" + $("#dDay").value); renderDay(); } catch (e) { $("#dMsg").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
 }
 function renderDay(){
   const S = DAY.suppliers, P = DAY.points;
-  $("#dGrid").innerHTML = `<tr><th>${t("point")}</th>${S.map(s => `<th>${esc(s.name)}</th>`).join("")}<th>${t("d_total")}</th><th>${t("d_rev")}</th><th>${t("d_pct")}</th><th>${t("d_left")}</th></tr>` +
-    P.map((p, i) => `<tr data-p="${i}"><td><b>${esc(p)}</b></td>${S.map(s => { const v = (DAY.cells[p] || {})[s.id]; return `<td><input inputmode="decimal" autocomplete="off" data-s="${s.id}" value="${fmtIn(v)}" placeholder="0"></td>`; }).join("")}<td class="tot">0</td><td class="rev"><small>…</small></td><td class="pct"></td><td class="left"></td></tr>`).join("") +
-    `<tr class="sum"><td>${t("d_total")}</td>${S.map(s => `<td data-cs="${s.id}">0</td>`).join("")}<td class="tot" id="dGrand">0</td><td class="rev" id="dRevAll">…</td><td class="pct" id="dPctAll"></td><td class="left" id="dLeftAll"></td></tr>`;
+  $("#dGrid").innerHTML = `<tr><th>${t("point")}</th>${S.map(s => `<th>${esc(s.name)}</th>`).join("")}<th>${t("d_total")}</th></tr>` +
+    P.map((p, i) => `<tr data-p="${i}"><td><b>${esc(p)}</b></td>${S.map(s => `<td><input inputmode="decimal" autocomplete="off" data-s="${s.id}" value="${fmtIn((DAY.cells[p] || {})[s.id])}" placeholder="0"></td>`).join("")}<td class="tot">0</td></tr>`).join("") +
+    `<tr class="sum"><td>${t("d_total")}</td>${S.map(s => `<td data-cs="${s.id}">0</td>`).join("")}<td class="tot" id="dGrand">0</td></tr>`;
   const spc = $("#spSup").value; $("#spSup").innerHTML = `<option value="">— ${t("b_sup")} —</option>` + S.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join(""); $("#spSup").value = spc;
   spDefaultDate();
-  $("#dSaved").textContent = DAY.saved ? `${t("d_saved_at")} ${DAY.saved.slice(11, 16)}` : "";
-  $("#dMsg").innerHTML = DAY.other ? `<small>+ ${DAY.other} ${t("d_other")}</small>` : "";
+  $("#dSaved").textContent = DAY.saved ? `✅ ${t("d_saved_at")} ${DAY.saved.slice(11, 16)}` : "";
   dDirty = false;
   $("#dGrid").querySelectorAll("input").forEach(inp => {
     moneyInput(inp); inp.addEventListener("input", () => { dDirty = true; dTotals(); });
@@ -1065,35 +1070,16 @@ function dTotals(){
     tr.querySelector(".tot").textContent = fmt(s); for (const k in c) cs[k] = (cs[k] || 0) + c[k]; });
   $("#dGrid").querySelectorAll("[data-cs]").forEach(td => td.textContent = fmt(cs[td.dataset.cs] || 0));
   $("#dGrand").textContent = fmt(g);
-  const R = DAY.revenue || {}; let rt = 0;
-  const pctLeft = (buy, rev, tdP, tdL) => { if (!DAY.revenue_on || !rev) { tdP.textContent = ""; tdL.textContent = ""; return; }
-    const pc = buy / rev * 100; tdP.innerHTML = `<b class="${pc > 45 ? "pos" : pc > 0 ? "neg" : ""}">${pc.toFixed(1)}%</b>`; tdL.innerHTML = `<b>${fmt(rev - buy)}</b>`; };
-  $("#dGrid").querySelectorAll("tr[data-p]").forEach(tr => { const p = DAY.points[+tr.dataset.p], rev = (R[p] || {}).total || 0; rt += rev;
-    pctLeft(Object.values(cells[p]).reduce((a, b) => a + b, 0), rev, tr.querySelector(".pct"), tr.querySelector(".left")); });
-  pctLeft(g, rt, $("#dPctAll"), $("#dLeftAll"));
 }
-function dText(){
-  const cells = dCollect(), d = $("#dDay").value, S = DAY.suppliers;
-  let txt = `🛒 Закуп Food house — ${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}\n`; let g = 0; const cs = {};
-  DAY.points.forEach(p => { const c = cells[p]; const s = Object.values(c).reduce((a, b) => a + b, 0); if (!s) return; g += s;
-    const rv = (DAY.revenue || {})[p];
-    txt += `\n📍 ${p}\n` + S.filter(x => c[x.id]).map(x => `  ${x.name}: ${fmt(c[x.id])}`).join("\n") + `\n  ${t("d_total")}: ${fmt(s)} ₸\n` +
-      (rv && rv.total ? `  ${t("d_rev")}: ${fmt(rv.total)} ₸ (☀️ ${fmt(rv.day)} + 🌙 ${fmt(rv.night)}) · ${(s / rv.total * 100).toFixed(1)}%\n` : "");
-    for (const k in c) cs[k] = (cs[k] || 0) + c[k]; });
-  const rt = Object.values(DAY.revenue || {}).reduce((a, v) => a + v.total, 0);
-  txt += `\n📊 ${t("d_total")}:\n` + S.filter(x => cs[x.id]).map(x => `  ${x.name}: ${fmt(cs[x.id])}`).join("\n") + `\n💰 ${fmt(g)} ₸` +
-    (rt ? `\n💵 ${t("d_rev")}: ${fmt(rt)} ₸ · ${t("d_pct")} ${(g / rt * 100).toFixed(1)}%` : "");
-  return txt;
-}
-$("#dDay").onchange = () => { if (dDirty && !confirm(t("d_unsaved") + ". OK?")) return; loadDay(); };
+const flashMsg = (html, ms = 3000) => { $("#dMsg").innerHTML = html; setTimeout(() => { if ($("#dMsg").innerHTML === html) $("#dMsg").innerHTML = ""; }, ms); };
+$("#dDay").onchange = () => { if (dDirty && !confirm(t("d_unsaved") + ". OK?")) return; $("#spInfo").innerHTML = ""; loadDay(); };
 $("#dSave").onclick = async () => {
-  try { const keep = DAY; DAY = await bApi("/api/purchases/day", "POST", {day: $("#dDay").value, cells: dCollect()});
-    Object.assign(DAY, {revenue: keep.revenue, revenue_on: keep.revenue_on, revenue_errors: []}); renderDay(); dRevCells();
-    $("#dMsg").innerHTML = t("d_ok"); setTimeout(() => $("#dMsg").innerHTML = "", 3000); loadBuyRev(); }
+  try { DAY = await bApi("/api/purchases/day", "POST", {day: $("#dDay").value, cells: dCollect()}); renderDay(); flashMsg(t("d_ok")); $("#spInfo").innerHTML = ""; loadBuyDays(); }
   catch (e) { $("#dMsg").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
 };
-$("#dCopy").onclick = async () => { try { await navigator.clipboard.writeText(dText()); $("#dMsg").innerHTML = t("d_copied"); setTimeout(() => $("#dMsg").innerHTML = "", 2500); } catch { prompt("", dText()); } };
-$("#dWa").onclick = () => window.open("https://wa.me/?text=" + encodeURIComponent(dText()), "_blank");
+$("#dCopy").onclick = async () => { if (await copyText(dayText($("#dDay").value, dCollect(), DAY.suppliers, DAY.points))) flashMsg(t("d_copied"), 2500); };
+$("#dWa").onclick = () => sendWA(dayText($("#dDay").value, dCollect(), DAY.suppliers, DAY.points));
+
 // ---------- разделить сумму поставщика по точкам по доле выручки ----------
 moneyInput($("#spAmt"));
 let spDateManual = false;
@@ -1107,12 +1093,12 @@ $("#spAmt").onkeydown = e => { if (e.key === "Enter") $("#spGo").click(); };
 $("#spGo").onclick = async () => {
   const info = $("#spInfo"), sid = $("#spSup").value, amt = Math.round(dNum($("#spAmt").value));
   if (!sid || !(amt > 0)) { info.innerHTML = `<span class="err">${t("sp_choose")}</span>`; return; }
-  info.innerHTML = `<small>${t("loading")}</small>`;
   if (!$("#spDate").value) spDefaultDate();
+  info.innerHTML = `<small>${t("loading")}</small>`;
   let r; try { r = await bApi(`/api/purchases/shares?day=${$("#spDate").value}&days=${$("#spBase").value}`); } catch (e) { info.innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
   if (!r.connected) { info.innerHTML = `<span class="err">${t("sp_off")}</span>`; return; }
   if (!r.total) { info.innerHTML = `<span class="err">${t("sp_norev")}</span>`; return; }
-  // делим: округляем до тенге, остаток — точке с наибольшей долей, чтобы сумма сошлась ровно
+  // округляем до тенге, остаток — точке с наибольшей долей, чтобы сумма сошлась ровно
   const P = DAY.points, parts = P.map(p => Math.floor(amt * (r.shares[p] || 0)));
   const rest = amt - parts.reduce((a, b) => a + b, 0), top = P.reduce((bi, p, i) => (r.shares[p] || 0) > (r.shares[P[bi]] || 0) ? i : bi, 0);
   parts[top] += rest;
@@ -1120,132 +1106,60 @@ $("#spGo").onclick = async () => {
     if (inp) { inp.value = parts[i] ? fmtIn(parts[i]) : ""; inp.classList.add("flash"); setTimeout(() => inp.classList.remove("flash"), 2500); } });
   dDirty = true; dTotals();
   const sname = (DAY.suppliers.find(x => x.id == sid) || {}).name || "";
-  const per = r.from === r.to ? r.from.slice(8, 10) + "." + r.from.slice(5, 7) : `${r.from.slice(8, 10)}.${r.from.slice(5, 7)}–${r.to.slice(8, 10)}.${r.to.slice(5, 7)}`;
-  info.innerHTML = `✅ ${t("sp_done")}: <b>${esc(sname)} ${fmt(amt)} ₸</b> (${t("d_rev")} ${per}: ${fmt(r.total)} ₸) → ` +
+  const per = r.from === r.to ? dmy(r.from).slice(0, 5) : `${dmy(r.from).slice(0, 5)}–${dmy(r.to).slice(0, 5)}`;
+  info.innerHTML = `✅ <b>${esc(sname)} ${fmt(amt)} ₸</b> (${per}) → ` +
     P.map((p, i) => `${esc(p)} <b>${((r.shares[p] || 0) * 100).toFixed(1)}%</b> = <b>${fmt(parts[i])} ₸</b>`).join(" · ") + `. ${t("sp_check")}`;
+  $("#spAmt").value = ""; $("#spSup").value = "";
 };
-// ---------- закуп ----------
-let BUY = null, BSUPS = [], bKind = "buy", bEdit = null, bFilter = 0;
-const MON = () => LANG === "kk" ? ["Қаңтар","Ақпан","Наурыз","Сәуір","Мамыр","Маусым","Шілде","Тамыз","Қыркүйек","Қазан","Қараша","Желтоқсан"] : ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
-const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
-function bQuery(){ return `year=${$("#bYear").value}&month=${$("#bMonth").value}&point=${encodeURIComponent($("#bPoint").value)}`; }
-function bSetKind(k){ bKind = k; document.querySelectorAll("#bKind button").forEach(b => b.classList.toggle("on", b.dataset.k === k)); }
-document.querySelectorAll("#bKind button").forEach(b => b.onclick = () => bSetKind(b.dataset.k));
+
+// ---------- сохранённые дни и поставщики ----------
 async function loadBuy(){
-  const y = new Date().getFullYear(), ys = $("#bYear"), ms = $("#bMonth");
-  if (!ys.options.length) { for (let i = y + 1; i >= 2024; i--) ys.add(new Option(i, i)); ys.value = y; }
-  const mcur = ms.value; ms.innerHTML = `<option value="0">${t("b_year")}</option>` + MON().map((m, i) => `<option value="${i + 1}">${m}</option>`).join(""); ms.value = mcur || "0";
-  try {
-    const sd = await bApi("/api/suppliers"); BSUPS = sd.suppliers; POINTS = sd.points;
-    const pc = $("#bPoint").value; $("#bPoint").innerHTML = `<option value="">${t("all_points")}</option>` + POINTS.map(p => `<option>${esc(p)}</option>`).join(""); $("#bPoint").value = pc;
-    const pt = $("#bPt").value; $("#bPt").innerHTML = `<option value="">${t("b_no_point")}</option>` + POINTS.map(p => `<option>${esc(p)}</option>`).join(""); $("#bPt").value = pt;
-    const sc = $("#bSup").value; $("#bSup").innerHTML = `<option value="">— ${t("b_sup")} —</option>` + BSUPS.filter(s => s.active).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join(""); $("#bSup").value = sc;
-    if (!$("#bDay").value) $("#bDay").value = todayISO();
-    BUY = await bApi("/api/purchases?" + bQuery());
-    renderBuy();
-    if (!dDirty) loadDay();
-    loadBuyRev();
-  } catch (e) { $("#buyBox").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+  const now = new Date(), ys = $("#bYear"), ms = $("#bMonth");
+  if (!ys.options.length) { for (let i = now.getFullYear() + 1; i >= 2024; i--) ys.add(new Option(i, i)); ys.value = now.getFullYear(); }
+  const mcur = ms.value; ms.innerHTML = `<option value="0">${t("b_year")}</option>` + MON().map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
+  ms.value = mcur || String(now.getMonth() + 1);
+  try { BSUPS = (await bApi("/api/suppliers")).suppliers; } catch {}
+  if (!dDirty) loadDay();
+  loadBuyDays();
 }
-async function loadBuyRev(){
-  const q = bQuery();
-  try { const r = await bApi("/api/purchases?rev=1&" + q); if (q === bQuery()) { BUY = r; renderBuy(); } } catch {}
+async function loadBuyDays(){
+  try { BUY = await bApi("/api/purchases?" + bQuery()); renderBuyDays(); } catch (e) { $("#buyBox").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
-function renderBuy(){
-  const d = BUY, T = d.totals, m = d.month;
-  const money = v => `${fmt(v)} ₸`;
-  const debtCls = v => v > 0.5 ? "pos" : v < -0.5 ? "neg" : "";
-  const debtTxt = v => v < -0.5 ? `${money(-v)} <small>(${t("b_overpaid")})</small>` : money(v);
-  let h = `<div class="kpis">
-    <div class="kpi"><small>${t("b_buy")}</small><b class="kbuy">${money(T.buy)}</b></div>
-    <div class="kpi"><small>${t("b_pay")}</small><b class="kpay">${money(T.pay)}</b></div>
-    <div class="kpi"><small>${t("b_total_debt")}</small><b class="${debtCls(T.closing)}">${debtTxt(T.closing)}</b></div>
-    ${Math.abs(T.opening) > 0.5 ? `<div class="kpi"><small>${t("b_open")}</small><b>${money(T.opening)}</b></div>` : ""}
-    ${d.revenue_on && d.revenue_total ? `<div class="kpi"><small>${t("d_rev_period")}</small><b>${money(d.revenue_total)}</b></div>
-      <div class="kpi"><small>${t("d_pct_rev")}</small><b class="${T.buy / d.revenue_total > .45 ? "pos" : "neg"}">${(T.buy / d.revenue_total * 100).toFixed(1)}%</b></div>` : ""}</div>`;
-  if (d.by_point && d.revenue_on) h += `<div class="kpis">${Object.entries(d.by_point).filter(([p]) => p).map(([p, x]) => `<div class="kpi"><small>📍 ${esc(p)}</small>
-      <div style="font-size:13px;margin-top:4px">${t("b_buy")}: <b style="display:inline;font-size:15px">${money(x.buy)}</b></div>
-      <div style="font-size:13px">${t("d_rev")}: <b style="display:inline;font-size:15px;color:var(--txt);text-shadow:none">${money(x.revenue)}</b></div>
-      ${x.revenue && d.revenue_total ? `<div style="font-size:13px">${t("sh_share")}: <b style="display:inline;font-size:15px">${(x.revenue / d.revenue_total * 100).toFixed(1)}%</b></div>` : ""}
-      ${x.revenue ? `<div style="font-size:13px">${t("d_pct")}: <b style="display:inline;font-size:15px" class="${x.buy / x.revenue > .45 ? "pos" : "neg"}">${(x.buy / x.revenue * 100).toFixed(1)}%</b></div>` : ""}</div>`).join("")}</div>`;
-  h += `<small style="display:block;margin:-4px 0 8px">${t("b_click")}</small><div class="sups">` + d.suppliers.map(x => `<div class="sup ${bFilter === x.id ? "on" : ""}" data-id="${x.id}">
-      <h4>${esc(x.name)}</h4>
-      ${Math.abs(x.opening) > 0.5 ? `<div class="l">${t("b_open")} <b>${money(x.opening)}</b></div>` : ""}
-      <div class="l">${t("b_buy")} <b class="kbuy">${money(x.buy)}</b></div>
-      <div class="l">${t("b_pay")} <b class="kpay">${money(x.pay)}</b></div>
-      <div class="debt"><span>${t("b_debt")}</span><b class="${debtCls(x.closing)}">${debtTxt(x.closing)}</b></div>
-      ${x.closing > 0.5 && x.active ? `<button class="paybtn" data-pay="${x.id}">${t("b_paybtn")}</button>` : ""}</div>`).join("") + `</div>`;
-  if (!m) {
-    const mn = MON().map(s => s.slice(0, 3));
-    h += `<div class="card"><h3>${t("b_months")}</h3><div class="md" style="overflow-x:auto"><table class="mtab"><tr><th>${t("b_sup")}</th>${mn.map(s => `<th>${s}</th>`).join("")}<th>Σ</th></tr>
-      ${d.suppliers.map(x => `<tr><td><b>${esc(x.name)}</b></td>${x.months.map(v => `<td>${v ? fmt(v) : "·"}</td>`).join("")}<td><b>${fmt(x.buy)}</b></td></tr>`).join("")}
-      <tr><td><b>Σ</b></td>${T.months.map(v => `<td><b>${v ? fmt(v) : "·"}</b></td>`).join("")}<td><b>${fmt(T.buy)}</b></td></tr></table></div></div>`;
-  }
-  const dsup = d.suppliers.filter(x => x.buy || x.active);
-  if (d.daily && d.daily.length) {
-    const rows = d.daily.slice(0, 60);
-    h += `<div class="card"><h3>${t("d_daily")} ${d.daily.length > 60 ? `<small>(${t("d_more")})</small>` : ""}</h3><div class="md" style="overflow-x:auto"><table class="dtab">
-      <tr><th>${t("date")}</th><th>${t("point")}</th>${dsup.map(x => `<th>${esc(x.name)}</th>`).join("")}<th>${t("d_total")}</th>${d.revenue_on ? `<th>${t("d_rev")}</th><th>${t("d_pct")}</th>` : ""}</tr>
-      ${rows.map((r, i) => `<tr><td>${i && rows[i - 1].day === r.day ? "" : `<b>${r.day.slice(8, 10)}.${r.day.slice(5, 7)}.${r.day.slice(0, 4)}</b>`}</td><td>${esc(r.point || "—")}</td>
-        ${dsup.map(x => `<td>${r.cells[x.id] ? fmt(r.cells[x.id]) : "·"}</td>`).join("")}<td class="tt">${r.total ? fmt(r.total) : "·"}</td>${d.revenue_on ? `<td>${r.revenue ? fmt(r.revenue.total) : "·"}</td><td>${r.revenue && r.revenue.total && r.total ? (r.total / r.revenue.total * 100).toFixed(1) + "%" : "·"}</td>` : ""}</tr>`).join("")}
-      <tr class="sum"><td colspan="2"><b>${t("d_total")}</b></td>${dsup.map(x => `<td><b>${fmt(x.buy)}</b></td>`).join("")}<td class="tt">${fmt(T.buy)}</td>${d.revenue_on ? `<td><b>${fmt(d.revenue_total)}</b></td><td><b>${d.revenue_total ? (T.buy / d.revenue_total * 100).toFixed(1) + "%" : "·"}</b></td>` : ""}</tr>
-    </table></div></div>`;
-  }
-  const recs = d.records.filter(r => !bFilter || r.supplier_id === bFilter);
-  const fname = bFilter ? (d.suppliers.find(x => x.id === bFilter) || {}).name : t("b_all_sup");
-  h += `<div class="card"><h3>${t("b_journal")} · ${esc(fname)} <small>(${recs.length} ${t("b_records")})</small>
-      ${bFilter ? `<button class="copy" style="float:right" id="bAll">${t("b_all_sup")}</button>` : ""}</h3>` + (recs.length ? `<div class="md" style="overflow-x:auto"><table>
-    <tr><th>${t("date")}</th><th>${t("b_sup")}</th><th>${t("b_type")}</th><th>${t("point")}</th><th style="text-align:right">${t("b_amt")}</th><th>${t("st_note")}</th><th></th></tr>
-    ${recs.map(r => `<tr><td>${r.day.slice(8, 10)}.${r.day.slice(5, 7)}.${r.day.slice(0, 4)}</td><td><b>${esc(r.supplier || "?")}</b></td>
-      <td>${r.kind === "buy" ? t("b_k_buy") : t("b_k_pay")}</td><td>${esc(r.point || "—")}</td>
-      <td style="text-align:right" class="${r.kind === "buy" ? "kbuy" : "kpay"}"><b>${r.kind === "pay" ? "−" : ""}${fmt(r.amount)} ₸</b></td><td>${esc(r.note || "")}</td>
-      <td class="st-act"><button data-be="${r.id}" title="${t("st_edit")}">✎</button><button data-bd="${r.id}" title="${t("st_del")}">🗑</button></td></tr>`).join("")}
-  </table></div>` : `<small>${t("b_empty")}</small>`) + `</div>`;
-  h += `<div class="card"><h3>${t("b_sups")}</h3>${BSUPS.filter(s => s.active).map(s => `<div class="suprow"><span><b>${esc(s.name)}</b></span>
+function histDays(){ // {день: {cells: {точка: {sid: сумма}}, pts: {точка: итого}, total}}
+  const days = {};
+  (BUY.daily || []).forEach(r => { const d = days[r.day] || (days[r.day] = {cells: {}, pts: {}, total: 0});
+    const c = d.cells[r.point] || (d.cells[r.point] = {}); for (const k in r.cells) c[k] = (c[k] || 0) + r.cells[k];
+    d.pts[r.point] = (d.pts[r.point] || 0) + r.total; d.total += r.total; });
+  return days;
+}
+function renderBuyDays(){
+  const days = histDays(), keys = Object.keys(days).sort().reverse();
+  const pts = [...new Set([...(DAY ? DAY.points : []), ...(BUY.daily || []).map(r => r.point)])].filter(p => keys.some(k => days[k].pts[p] !== undefined) || (DAY && DAY.points.includes(p)));
+  const sumPts = {}; let sumAll = 0; keys.forEach(k => { pts.forEach(p => sumPts[p] = (sumPts[p] || 0) + (days[k].pts[p] || 0)); sumAll += days[k].total; });
+  let h = `<div class="card"><h3>${t("h_days")} <small>(${t("h_click")})</small></h3>` + (keys.length ? `<div class="md" style="overflow-x:auto"><table class="htab">
+    <tr><th>${t("date")}</th>${pts.map(p => `<th>${esc(p)}</th>`).join("")}<th>${t("d_total")}</th><th></th></tr>
+    ${keys.map(k => `<tr class="hrow ${DAY && DAY.day === k ? "on" : ""}" data-d="${k}"><td><b>${dmy(k)}</b></td>${pts.map(p => `<td>${days[k].pts[p] ? fmt(days[k].pts[p]) : "·"}</td>`).join("")}<td class="tt">${fmt(days[k].total)}</td>
+      <td class="st-act" style="white-space:nowrap"><button data-open="${k}" title="${t("h_open")}">📄</button><button data-wa="${k}" title="WhatsApp" style="color:#4ade80">🟢</button></td></tr>`).join("")}
+    <tr class="sum"><td><b>${t("d_total")}</b></td>${pts.map(p => `<td><b>${fmt(sumPts[p])}</b></td>`).join("")}<td class="tt">${fmt(sumAll)}</td><td></td></tr>
+  </table></div>` : `<small>${t("h_empty")}</small>`) + `</div>`;
+  h += `<details class="card"><summary><b>${t("b_sups")}</b> <small>(${t("h_sups_hint")})</small></summary>
+    ${BSUPS.filter(s => s.active).map(s => `<div class="suprow"><span><b>${esc(s.name)}</b></span>
       <span class="st-act" style="flex:0;white-space:nowrap"><button data-sr="${s.id}" title="${t("st_edit")}">✎</button><button data-sd="${s.id}" title="${t("b_del_sup")}">🗑</button></span></div>`).join("")}
-    <div class="supadd"><input type="text" id="bNewSup" placeholder="${t("b_add_sup")}"><button class="main" id="bAddSup" style="padding:8px 14px">${t("b_add")}</button></div></div>`;
-  $("#buyBox").innerHTML = h;
-  document.querySelectorAll(".sup").forEach(e => e.onclick = ev => { if (ev.target.dataset.pay) return; bFilter = bFilter === +e.dataset.id ? 0 : +e.dataset.id; renderBuy(); });
-  document.querySelectorAll("[data-pay]").forEach(b => b.onclick = () => { const x = d.suppliers.find(s => s.id === +b.dataset.pay); bReset(); bSetKind("pay");
-    $("#bSup").value = x.id; $("#bAmt").value = fmtIn(x.closing); $("#bDay").value = todayISO(); $("#bAmt").focus(); window.scrollTo({top: $("#buy").offsetTop - 80, behavior: "smooth"}); });
-  if ($("#bAll")) $("#bAll").onclick = () => { bFilter = 0; renderBuy(); };
-  document.querySelectorAll("[data-bd]").forEach(b => b.onclick = async () => { if (!confirm(t("b_confirm") + "?")) return;
-    try { await bApi("/api/purchases/" + b.dataset.bd, "DELETE"); loadBuy(); } catch (e) { alert(e.message); } });
-  document.querySelectorAll("[data-be]").forEach(b => b.onclick = () => { const r = d.records.find(x => x.id === +b.dataset.be); bEdit = r.id; bSetKind(r.kind);
-    $("#bSup").value = r.supplier_id; $("#bDay").value = r.day; $("#bPt").value = r.point || ""; $("#bAmt").value = fmtIn(r.amount); $("#bNote").value = r.note || "";
-    $("#bSave").textContent = t("st_btn_save"); $("#bFormTitle").textContent = t("b_edit"); $("#bCancel").style.display = ""; window.scrollTo({top: $("#buy").offsetTop - 80, behavior: "smooth"}); });
+    <div class="supadd"><input type="text" id="bNewSup" placeholder="${t("b_add_sup")}"><button class="main" id="bAddSup" style="padding:8px 14px">${t("b_add")}</button></div></details>`;
+  const open = $("#buyBox details")?.open; $("#buyBox").innerHTML = h; if (open) $("#buyBox details").open = true;
+  const openDay = k => { if (dDirty && !confirm(t("d_unsaved") + ". OK?")) return; $("#dDay").value = k; $("#spInfo").innerHTML = ""; loadDay().then(renderBuyDays);
+    window.scrollTo({top: $("#buy").offsetTop - 80, behavior: "smooth"}); };
+  document.querySelectorAll(".hrow").forEach(tr => tr.onclick = e => { if (!e.target.dataset.wa) openDay(tr.dataset.d); });
+  document.querySelectorAll("[data-wa]").forEach(b => b.onclick = e => { e.stopPropagation(); const d = days[b.dataset.wa];
+    sendWA(dayText(b.dataset.wa, d.cells, BSUPS, pts)); });
   document.querySelectorAll("[data-sr]").forEach(b => b.onclick = async () => { const s = BSUPS.find(x => x.id === +b.dataset.sr); const n = prompt(t("b_rename"), s.name); if (!n || !n.trim()) return;
-    try { await bApi("/api/suppliers/" + s.id, "PUT", {name: n.trim(), active: true}); loadBuy(); } catch (e) { alert(e.message); } });
+    try { await bApi("/api/suppliers/" + s.id, "PUT", {name: n.trim(), active: true}); dDirty = false; loadBuy(); } catch (e) { alert(e.message); } });
   document.querySelectorAll("[data-sd]").forEach(b => b.onclick = async () => { const s = BSUPS.find(x => x.id === +b.dataset.sd); if (!confirm(t("b_del_sup") + " «" + s.name + "»?")) return;
-    try { await bApi("/api/suppliers/" + s.id, "DELETE"); if (bFilter === s.id) bFilter = 0; loadBuy(); } catch (e) { alert(e.message); } });
-  $("#bAddSup").onclick = async () => { const n = $("#bNewSup").value.trim(); if (!n) return; try { await bApi("/api/suppliers", "POST", {name: n}); loadBuy(); } catch (e) { alert(e.message); } };
+    try { await bApi("/api/suppliers/" + s.id, "DELETE"); dDirty = false; loadBuy(); } catch (e) { alert(e.message); } });
+  $("#bAddSup").onclick = async () => { const n = $("#bNewSup").value.trim(); if (!n) return; try { await bApi("/api/suppliers", "POST", {name: n}); dDirty = false; loadBuy(); } catch (e) { alert(e.message); } };
   $("#bNewSup").onkeydown = e => { if (e.key === "Enter") $("#bAddSup").click(); };
 }
-async function bApi(url, method = "GET", body){
-  const r = await fetch(url, {method, headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
-  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `${t("err_server")} (${r.status})`); return j;
-}
-function bReset(){ bEdit = null; $("#bAmt").value = ""; $("#bNote").value = ""; $("#bSave").textContent = t("st_btn_add"); $("#bFormTitle").textContent = t("b_new"); $("#bCancel").style.display = "none"; }
-$("#bCancel").onclick = () => { bReset(); bSetKind("buy"); };
-$("#bSave").onclick = async () => {
-  const msg = $("#bMsg"); msg.className = ""; msg.textContent = "";
-  if (!$("#bSup").value) { msg.className = "err"; msg.textContent = t("b_choose"); $("#bSup").focus(); return; }
-  const amt = dNum($("#bAmt").value); if (!(amt > 0)) { msg.className = "err"; msg.textContent = t("b_bad_amt"); $("#bAmt").focus(); return; }
-  const body = {supplier_id: +$("#bSup").value, kind: bKind, amount: amt, day: $("#bDay").value || todayISO(), point: $("#bPt").value, note: $("#bNote").value};
-  try { await bApi(bEdit ? "/api/purchases/" + bEdit : "/api/purchases", bEdit ? "PUT" : "POST", body); bReset(); bSetKind("buy"); msg.textContent = t("b_saved"); setTimeout(() => msg.textContent = "", 2500); loadBuy(); }
-  catch (e) { msg.className = "err"; msg.textContent = e.message; }
-};
-const fmtIn = v => { if (!v) return ""; const [a, b] = (Math.round(v * 100) / 100).toString().split("."); return a.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (b ? "," + b : ""); };
-function moneyInput(inp){
-  inp.addEventListener("input", () => {
-    const raw = inp.value.replace(/[^\d.,]/g, "").replace(",", "."), [a, b] = raw.split(".");
-    const v = (a || "").replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (b !== undefined ? "," + b.slice(0, 2) : "");
-    if (v !== inp.value) { const end = inp.value.length - inp.selectionEnd; inp.value = v; const pos = Math.max(0, v.length - end); inp.setSelectionRange(pos, pos); }
-  });
-}
-moneyInput($("#bAmt"));
-$("#bAmt").onkeydown = $("#bNote").onkeydown = e => { if (e.key === "Enter") $("#bSave").click(); };
-["#bYear", "#bMonth", "#bPoint"].forEach(s => $(s).onchange = () => loadBuy());
+["#bYear", "#bMonth"].forEach(s => $(s).onchange = loadBuyDays);
 $("#bPdf").onclick = () => { window.location.href = "/api/purchases/pdf?" + bQuery() + "&lang=" + LANG; };
 $("#stFilter").onchange = renderStock; $("#stSearch").oninput = renderStock;
 $("#stAsk").onclick = () => {

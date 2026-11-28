@@ -22,7 +22,7 @@ import whatsapp  # noqa: E402
 from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
-APP_VERSION = "2026-11-28.11"
+APP_VERSION = "2026-11-28.12"
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
@@ -485,7 +485,7 @@ def purchases_pdf(year: int = 0, month: int = 0, point: str = "", lang: str = "r
 
     y, m = _year(year), (month if 1 <= month <= 12 else 0)
     try:
-        data = ppdf.build(_with_revenue(memory.purchase_report(y, m, point)), lang)
+        data = ppdf.build(memory.purchase_report(y, m, point), lang)
     except FileNotFoundError as e:
         raise HTTPException(500, str(e))
     name = f"Закуп_{y}" + (f"_{m:02d}" if m else "") + (f"_{point}" if point else "") + ".pdf"
