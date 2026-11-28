@@ -779,3 +779,51 @@ def metrics_catalog():
     for a in accounts()[:1]:
         out[a["name"]] = _get(a["key"], "/reports/metrics/catalog")
     return out
+
+
+# ---------- выручка по сменам для закупа ----------
+def _point_name(a) -> str:
+    """Имя точки аккаунта так, как оно записано в закупе (28а / 13 / Озен Food house)."""
+    try:
+        import memory
+        pts = memory.points()
+    except Exception:
+        pts = []
+    if a["name"] in pts:
+        return a["name"]
+    return pts[a["idx"]] if a["idx"] < len(pts) else a["name"]
+
+
+def revenue(date_from: str, date_to: str) -> dict:
+    """Выручка по настоящим сменам касс за интервал дат (включительно): {точка: {дата: {day, night, total, orders, open}}}.
+    Дата — рабочий день: дневная смена (~09:00) + ночная (~21:00 до утра). Один запрос на точку, с кэшем."""
+    if not connected():
+        return {"connected": False, "points": {}, "errors": []}
+    a, b = date.fromisoformat(date_from), date.fromisoformat(date_to)
+    t = today()
+    b = min(b, t)
+    if a > b:
+        return {"connected": True, "points": {}, "errors": []}
+
+    def load():
+        cfg = shifts_cfg()
+        kind = {s_["name"]: ("day" if i == 0 else "night") for i, s_ in enumerate(cfg)}
+        out, errs = {}, []
+        for acc in accounts():              # по очереди: Paloma даёт один отчёт за раз
+            name = _point_name(acc)
+            try:
+                for sh in _register_shifts(acc, None, a - timedelta(days=1), min(b + timedelta(days=1), t)):
+                    bd, sname = _biz_of_shift(sh["opened"], cfg)
+                    if not (a <= bd <= b):
+                        continue
+                    r = out.setdefault(name, {}).setdefault(bd.isoformat(), {"day": 0.0, "night": 0.0, "total": 0.0, "orders": 0.0, "open": False})
+                    r[kind.get(sname, "day")] += sh["net"]
+                    r["total"] += sh["net"]
+                    r["orders"] += sh["orders"]
+                    if not sh["closed"]:
+                        r["open"] = True
+            except Exception as e:
+                errs.append(f"{name}: {e}")
+        return {"connected": True, "points": out, "errors": errs}
+    recent = b >= t - timedelta(days=1)
+    return _cached(f"rev:{a}:{b}", load, 60 if recent else 6 * 3600, stale=900 if recent else 24 * 3600)

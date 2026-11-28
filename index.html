@@ -157,6 +157,19 @@
   .sup .paybtn:hover{border-color:#22d3ee}
   .kbuy{color:#67e8f9}.kpay{color:#34d399}
   .mtab td,.mtab th{text-align:right;white-space:nowrap}.mtab td:first-child,.mtab th:first-child{text-align:left}
+  .dgrid th,.dgrid td{text-align:center;white-space:nowrap;vertical-align:middle;padding:6px 5px}
+  .dgrid td:first-child,.dgrid th:first-child{text-align:left}
+  .dgrid input{width:100%;min-width:64px;box-sizing:border-box;text-align:right;background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px;font:inherit}
+  .dgrid input:focus{border-color:#22d3ee;outline:none;box-shadow:0 0 8px #22d3ee55}
+  .dgrid .tot{color:#67e8f9;font-weight:700;text-align:right}
+  .dgrid tr.sum td{background:#0e2440;font-weight:700;text-align:right}
+  .dgrid tr.sum td:first-child{text-align:left}
+  .dgrid td.rev{text-align:right;line-height:1.25}.dgrid td.rev small{display:block;font-size:11px;color:var(--mute)}
+  .dgrid td.rev span{color:#34d399}
+  .dgrid td.pct,.dgrid td.left{text-align:right}
+  .dinp{background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px;font:inherit}
+  .dtab td,.dtab th{text-align:right;white-space:nowrap}.dtab td:nth-child(-n+2),.dtab th:nth-child(-n+2){text-align:left}
+  .dtab td.tt{color:#67e8f9;font-weight:700}
   .supadd{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
   .suprow{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
   .suprow span{flex:1}
@@ -269,6 +282,20 @@
         <select id="bYear"></select><select id="bMonth"></select><select id="bPoint"></select>
         <button class="main" id="bPdf" style="padding:8px 14px" data-i18n="b_pdf">📄 Скачать PDF</button>
       </div>
+    </div>
+    <div class="card" id="dayCard">
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h3 style="margin:0" data-i18n="d_h">🗓 Закуп за день</h3>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><input type="date" id="dDay" class="dinp"><span id="dSaved" style="font-size:12px;color:var(--mute)"></span></div>
+      </div>
+      <div class="md" style="overflow-x:auto;margin-top:10px"><table class="dgrid" id="dGrid"></table></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="main" id="dSave" style="padding:10px 18px" data-i18n="d_save">💾 Сохранить день</button>
+        <button class="copy" style="float:none" id="dCopy" data-i18n="d_copy">📋 Скопировать текст</button>
+        <button class="copy" style="float:none;color:#4ade80" id="dWa" data-i18n="d_wa">🟢 Отправить в WhatsApp</button>
+        <span id="dMsg"></span>
+      </div>
+      <small data-i18n="d_hint">Каждый день вписывайте суммы закупа по точкам и нажмите «Сохранить». Можно открыть любую дату и исправить — сохранится заново.</small>
     </div>
     <div class="card">
       <h3 id="bFormTitle" data-i18n="b_new">Новая запись</h3>
@@ -420,6 +447,10 @@ const I18N = {
     b_months:"Закуп по месяцам", b_journal:"Журнал записей", b_all_sup:"все поставщики", b_empty:"Записей пока нет. Добавьте первый закуп или оплату выше.", b_sups:"Поставщики",
     b_add_sup:"Новый поставщик", b_add:"Добавить", b_rename:"Новое название", b_del_sup:"Убрать поставщика", b_confirm:"Удалить запись", b_saved:"✅ Сохранено", b_no_point:"Общий (без точки)",
     b_overpaid:"переплата", b_choose:"Выберите поставщика", b_bad_amt:"Введите сумму", b_type:"Тип", b_records:"записей", b_click:"нажмите на поставщика — покажу только его записи",
+    d_rev:"Выручка", d_pct:"Закуп %", d_left:"Остаток", d_open:"смена ещё открыта", d_norev:"нет смен", d_rev_period:"Выручка (по сменам)", d_pct_rev:"Закуп от выручки",
+    d_h:"🗓 Закуп за день", d_save:"💾 Сохранить день", d_copy:"📋 Скопировать текст", d_wa:"🟢 Отправить в WhatsApp", d_total:"Итого", d_saved_at:"сохранено",
+    d_hint:"Каждый день вписывайте суммы закупа по точкам и нажмите «Сохранить». Можно открыть любую дату и исправить — сохранится заново.", d_ok:"✅ День сохранён", d_copied:"✅ Скопировано",
+    d_other:"ещё отдельных записей за этот день", d_daily:"Закуп по дням", d_more:"показаны последние 60 строк, полностью — в PDF", d_unsaved:"есть несохранённые изменения",
     tab_stock:"Склад", p_today:"Сегодня", p_yesterday:"Вчера", p_week:"Неделя", p_month:"Месяц", all_points:"Все точки", point:"Точка",
     k_prev:"Прошлый период", t_hourly:"Выручка по часам", t_points:"По точкам",
     stock_h:"Склад", st_search:"Поиск…", st_ask:"🤖 Что закупить?", st_add:"Добавить продукт", st_name:"Название", st_cat:"Категория",
@@ -489,6 +520,10 @@ const I18N = {
     b_months:"Айлар бойынша сатып алу", b_journal:"Жазбалар журналы", b_all_sup:"барлық жеткізушілер", b_empty:"Әзірге жазба жоқ. Жоғарыда алғашқы сатып алуды немесе төлемді қосыңыз.", b_sups:"Жеткізушілер",
     b_add_sup:"Жаңа жеткізуші", b_add:"Қосу", b_rename:"Жаңа атауы", b_del_sup:"Жеткізушіні алып тастау", b_confirm:"Жазбаны өшіру", b_saved:"✅ Сақталды", b_no_point:"Ортақ (нүктесіз)",
     b_overpaid:"артық төлем", b_choose:"Жеткізушіні таңдаңыз", b_bad_amt:"Соманы енгізіңіз", b_type:"Түрі", b_records:"жазба", b_click:"жеткізушіні басыңыз — тек оның жазбаларын көрсетемін",
+    d_rev:"Түсім", d_pct:"Сатып алу %", d_left:"Қалдық", d_open:"ауысым әлі ашық", d_norev:"ауысым жоқ", d_rev_period:"Түсім (ауысымдар бойынша)", d_pct_rev:"Түсімнен сатып алу",
+    d_h:"🗓 Күндік сатып алу", d_save:"💾 Күнді сақтау", d_copy:"📋 Мәтінді көшіру", d_wa:"🟢 WhatsApp-қа жіберу", d_total:"Барлығы", d_saved_at:"сақталды",
+    d_hint:"Күн сайын нүктелер бойынша сатып алу сомасын жазып, «Сақтау» басыңыз. Кез келген күнді ашып түзетуге болады.", d_ok:"✅ Күн сақталды", d_copied:"✅ Көшірілді",
+    d_other:"осы күнге бөлек жазба тағы бар", d_daily:"Күндер бойынша сатып алу", d_more:"соңғы 60 жол көрсетілген, толығы — PDF-те", d_unsaved:"сақталмаған өзгерістер бар",
     tab_stock:"Қойма", p_today:"Бүгін", p_yesterday:"Кеше", p_week:"Апта", p_month:"Ай", all_points:"Барлық нүктелер", point:"Нүкте",
     k_prev:"Өткен кезең", t_hourly:"Сағат бойынша түсім", t_points:"Нүктелер бойынша",
     stock_h:"Қойма", st_search:"Іздеу…", st_ask:"🤖 Не сатып алу керек?", st_add:"Өнім қосу", st_name:"Атауы", st_cat:"Санат",
@@ -941,6 +976,80 @@ $("#stSave").onclick = async () => {
   try { await stCall(stEdit ? "/api/stock/" + stEdit : "/api/stock", stEdit ? "PUT" : "POST", body); stReset(); } catch (e) { alert(e.message); }
 };
 $("#stName").onkeydown = $("#stQty").onkeydown = e => e.key === "Enter" && $("#stSave").click();
+// ---------- дневной закуп таблицей ----------
+let DAY = null, dDirty = false;
+const dNum = v => { const n = parseFloat(String(v).replace(/\s/g, "").replace(",", ".")); return isFinite(n) && n > 0 ? n : 0; };
+async function loadDay(){
+  if (!$("#dDay").value) $("#dDay").value = todayISO();
+  const day = $("#dDay").value;
+  try { DAY = await bApi("/api/purchases/day?day=" + day); renderDay(); } catch (e) { $("#dMsg").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  try { const r = await bApi("/api/purchases/day?rev=1&day=" + day);
+    if ($("#dDay").value === day && DAY) { DAY.revenue = r.revenue; DAY.revenue_on = r.revenue_on; DAY.revenue_errors = r.revenue_errors; dRevCells(); } } catch {}
+}
+function dRevCells(){
+  const R = DAY.revenue || {}, on = DAY.revenue_on;
+  $("#dGrid").querySelectorAll("tr[data-p]").forEach(tr => { const v = R[DAY.points[+tr.dataset.p]];
+    tr.querySelector(".rev").innerHTML = !on ? "—" : v ? `<b>${fmt(v.total)}</b>${v.open ? ' <span title="' + t("d_open") + '">●</span>' : ""}<small>☀️ ${fmt(v.day)} · 🌙 ${fmt(v.night)}</small>` : `<small>${t("d_norev")}</small>`; });
+  const tot = Object.values(R).reduce((a, v) => a + v.total, 0);
+  $("#dRevAll").innerHTML = on ? `<b>${fmt(tot)}</b>` : "—";
+  if (DAY.revenue_errors && DAY.revenue_errors.length) $("#dMsg").innerHTML = `<small class="err">Paloma: ${esc(DAY.revenue_errors[0]).slice(0, 140)}</small>`;
+  dTotals();
+}
+function renderDay(){
+  const S = DAY.suppliers, P = DAY.points;
+  $("#dGrid").innerHTML = `<tr><th>${t("point")}</th>${S.map(s => `<th>${esc(s.name)}</th>`).join("")}<th>${t("d_total")}</th><th>${t("d_rev")}</th><th>${t("d_pct")}</th><th>${t("d_left")}</th></tr>` +
+    P.map((p, i) => `<tr data-p="${i}"><td><b>${esc(p)}</b></td>${S.map(s => { const v = (DAY.cells[p] || {})[s.id]; return `<td><input inputmode="decimal" data-s="${s.id}" value="${v ? Math.round(v * 100) / 100 : ""}" placeholder="0"></td>`; }).join("")}<td class="tot">0</td><td class="rev"><small>…</small></td><td class="pct"></td><td class="left"></td></tr>`).join("") +
+    `<tr class="sum"><td>${t("d_total")}</td>${S.map(s => `<td data-cs="${s.id}">0</td>`).join("")}<td class="tot" id="dGrand">0</td><td class="rev" id="dRevAll">…</td><td class="pct" id="dPctAll"></td><td class="left" id="dLeftAll"></td></tr>`;
+  $("#dSaved").textContent = DAY.saved ? `${t("d_saved_at")} ${DAY.saved.slice(11, 16)}` : "";
+  $("#dMsg").innerHTML = DAY.other ? `<small>+ ${DAY.other} ${t("d_other")}</small>` : "";
+  dDirty = false;
+  $("#dGrid").querySelectorAll("input").forEach(inp => {
+    inp.oninput = () => { dDirty = true; dTotals(); };
+    inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); const all = [...$("#dGrid").querySelectorAll("input")]; const n = all[all.indexOf(inp) + 1]; n ? n.focus() : $("#dSave").click(); } };
+  });
+  dTotals();
+}
+function dCollect(){
+  const cells = {};
+  $("#dGrid").querySelectorAll("tr[data-p]").forEach(tr => { const p = DAY.points[+tr.dataset.p]; cells[p] = {};
+    tr.querySelectorAll("input").forEach(i => { const v = dNum(i.value); if (v) cells[p][i.dataset.s] = v; }); });
+  return cells;
+}
+function dTotals(){
+  const cells = dCollect(); let g = 0; const cs = {};
+  $("#dGrid").querySelectorAll("tr[data-p]").forEach(tr => { const c = cells[DAY.points[+tr.dataset.p]]; const s = Object.values(c).reduce((a, b) => a + b, 0); g += s;
+    tr.querySelector(".tot").textContent = fmt(s); for (const k in c) cs[k] = (cs[k] || 0) + c[k]; });
+  $("#dGrid").querySelectorAll("[data-cs]").forEach(td => td.textContent = fmt(cs[td.dataset.cs] || 0));
+  $("#dGrand").textContent = fmt(g);
+  const R = DAY.revenue || {}; let rt = 0;
+  const pctLeft = (buy, rev, tdP, tdL) => { if (!DAY.revenue_on || !rev) { tdP.textContent = ""; tdL.textContent = ""; return; }
+    const pc = buy / rev * 100; tdP.innerHTML = `<b class="${pc > 45 ? "pos" : pc > 0 ? "neg" : ""}">${pc.toFixed(1)}%</b>`; tdL.innerHTML = `<b>${fmt(rev - buy)}</b>`; };
+  $("#dGrid").querySelectorAll("tr[data-p]").forEach(tr => { const p = DAY.points[+tr.dataset.p], rev = (R[p] || {}).total || 0; rt += rev;
+    pctLeft(Object.values(cells[p]).reduce((a, b) => a + b, 0), rev, tr.querySelector(".pct"), tr.querySelector(".left")); });
+  pctLeft(g, rt, $("#dPctAll"), $("#dLeftAll"));
+}
+function dText(){
+  const cells = dCollect(), d = $("#dDay").value, S = DAY.suppliers;
+  let txt = `🛒 Закуп Food house — ${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}\n`; let g = 0; const cs = {};
+  DAY.points.forEach(p => { const c = cells[p]; const s = Object.values(c).reduce((a, b) => a + b, 0); if (!s) return; g += s;
+    const rv = (DAY.revenue || {})[p];
+    txt += `\n📍 ${p}\n` + S.filter(x => c[x.id]).map(x => `  ${x.name}: ${fmt(c[x.id])}`).join("\n") + `\n  ${t("d_total")}: ${fmt(s)} ₸\n` +
+      (rv && rv.total ? `  ${t("d_rev")}: ${fmt(rv.total)} ₸ (☀️ ${fmt(rv.day)} + 🌙 ${fmt(rv.night)}) · ${(s / rv.total * 100).toFixed(1)}%\n` : "");
+    for (const k in c) cs[k] = (cs[k] || 0) + c[k]; });
+  const rt = Object.values(DAY.revenue || {}).reduce((a, v) => a + v.total, 0);
+  txt += `\n📊 ${t("d_total")}:\n` + S.filter(x => cs[x.id]).map(x => `  ${x.name}: ${fmt(cs[x.id])}`).join("\n") + `\n💰 ${fmt(g)} ₸` +
+    (rt ? `\n💵 ${t("d_rev")}: ${fmt(rt)} ₸ · ${t("d_pct")} ${(g / rt * 100).toFixed(1)}%` : "");
+  return txt;
+}
+$("#dDay").onchange = () => { if (dDirty && !confirm(t("d_unsaved") + ". OK?")) return; loadDay(); };
+$("#dSave").onclick = async () => {
+  try { const keep = DAY; DAY = await bApi("/api/purchases/day", "POST", {day: $("#dDay").value, cells: dCollect()});
+    Object.assign(DAY, {revenue: keep.revenue, revenue_on: keep.revenue_on, revenue_errors: []}); renderDay(); dRevCells();
+    $("#dMsg").innerHTML = t("d_ok"); setTimeout(() => $("#dMsg").innerHTML = "", 3000); loadBuyRev(); }
+  catch (e) { $("#dMsg").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+};
+$("#dCopy").onclick = async () => { try { await navigator.clipboard.writeText(dText()); $("#dMsg").innerHTML = t("d_copied"); setTimeout(() => $("#dMsg").innerHTML = "", 2500); } catch { prompt("", dText()); } };
+$("#dWa").onclick = () => window.open("https://wa.me/?text=" + encodeURIComponent(dText()), "_blank");
 // ---------- закуп ----------
 let BUY = null, BSUPS = [], bKind = "buy", bEdit = null, bFilter = 0;
 const MON = () => LANG === "kk" ? ["Қаңтар","Ақпан","Наурыз","Сәуір","Мамыр","Маусым","Шілде","Тамыз","Қыркүйек","Қазан","Қараша","Желтоқсан"] : ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
@@ -960,7 +1069,13 @@ async function loadBuy(){
     if (!$("#bDay").value) $("#bDay").value = todayISO();
     BUY = await bApi("/api/purchases?" + bQuery());
     renderBuy();
+    if (!dDirty) loadDay();
+    loadBuyRev();
   } catch (e) { $("#buyBox").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+}
+async function loadBuyRev(){
+  const q = bQuery();
+  try { const r = await bApi("/api/purchases?rev=1&" + q); if (q === bQuery()) { BUY = r; renderBuy(); } } catch {}
 }
 function renderBuy(){
   const d = BUY, T = d.totals, m = d.month;
@@ -971,7 +1086,13 @@ function renderBuy(){
     <div class="kpi"><small>${t("b_buy")}</small><b class="kbuy">${money(T.buy)}</b></div>
     <div class="kpi"><small>${t("b_pay")}</small><b class="kpay">${money(T.pay)}</b></div>
     <div class="kpi"><small>${t("b_total_debt")}</small><b class="${debtCls(T.closing)}">${debtTxt(T.closing)}</b></div>
-    ${Math.abs(T.opening) > 0.5 ? `<div class="kpi"><small>${t("b_open")}</small><b>${money(T.opening)}</b></div>` : ""}</div>`;
+    ${Math.abs(T.opening) > 0.5 ? `<div class="kpi"><small>${t("b_open")}</small><b>${money(T.opening)}</b></div>` : ""}
+    ${d.revenue_on && d.revenue_total ? `<div class="kpi"><small>${t("d_rev_period")}</small><b>${money(d.revenue_total)}</b></div>
+      <div class="kpi"><small>${t("d_pct_rev")}</small><b class="${T.buy / d.revenue_total > .45 ? "pos" : "neg"}">${(T.buy / d.revenue_total * 100).toFixed(1)}%</b></div>` : ""}</div>`;
+  if (d.by_point && d.revenue_on) h += `<div class="kpis">${Object.entries(d.by_point).filter(([p]) => p).map(([p, x]) => `<div class="kpi"><small>📍 ${esc(p)}</small>
+      <div style="font-size:13px;margin-top:4px">${t("b_buy")}: <b style="display:inline;font-size:15px">${money(x.buy)}</b></div>
+      <div style="font-size:13px">${t("d_rev")}: <b style="display:inline;font-size:15px;color:var(--txt);text-shadow:none">${money(x.revenue)}</b></div>
+      ${x.revenue ? `<div style="font-size:13px">${t("d_pct")}: <b style="display:inline;font-size:15px" class="${x.buy / x.revenue > .45 ? "pos" : "neg"}">${(x.buy / x.revenue * 100).toFixed(1)}%</b></div>` : ""}</div>`).join("")}</div>`;
   h += `<small style="display:block;margin:-4px 0 8px">${t("b_click")}</small><div class="sups">` + d.suppliers.map(x => `<div class="sup ${bFilter === x.id ? "on" : ""}" data-id="${x.id}">
       <h4>${esc(x.name)}</h4>
       ${Math.abs(x.opening) > 0.5 ? `<div class="l">${t("b_open")} <b>${money(x.opening)}</b></div>` : ""}
@@ -984,6 +1105,16 @@ function renderBuy(){
     h += `<div class="card"><h3>${t("b_months")}</h3><div class="md" style="overflow-x:auto"><table class="mtab"><tr><th>${t("b_sup")}</th>${mn.map(s => `<th>${s}</th>`).join("")}<th>Σ</th></tr>
       ${d.suppliers.map(x => `<tr><td><b>${esc(x.name)}</b></td>${x.months.map(v => `<td>${v ? fmt(v) : "·"}</td>`).join("")}<td><b>${fmt(x.buy)}</b></td></tr>`).join("")}
       <tr><td><b>Σ</b></td>${T.months.map(v => `<td><b>${v ? fmt(v) : "·"}</b></td>`).join("")}<td><b>${fmt(T.buy)}</b></td></tr></table></div></div>`;
+  }
+  const dsup = d.suppliers.filter(x => x.buy || x.active);
+  if (d.daily && d.daily.length) {
+    const rows = d.daily.slice(0, 60);
+    h += `<div class="card"><h3>${t("d_daily")} ${d.daily.length > 60 ? `<small>(${t("d_more")})</small>` : ""}</h3><div class="md" style="overflow-x:auto"><table class="dtab">
+      <tr><th>${t("date")}</th><th>${t("point")}</th>${dsup.map(x => `<th>${esc(x.name)}</th>`).join("")}<th>${t("d_total")}</th>${d.revenue_on ? `<th>${t("d_rev")}</th><th>${t("d_pct")}</th>` : ""}</tr>
+      ${rows.map((r, i) => `<tr><td>${i && rows[i - 1].day === r.day ? "" : `<b>${r.day.slice(8, 10)}.${r.day.slice(5, 7)}.${r.day.slice(0, 4)}</b>`}</td><td>${esc(r.point || "—")}</td>
+        ${dsup.map(x => `<td>${r.cells[x.id] ? fmt(r.cells[x.id]) : "·"}</td>`).join("")}<td class="tt">${r.total ? fmt(r.total) : "·"}</td>${d.revenue_on ? `<td>${r.revenue ? fmt(r.revenue.total) : "·"}</td><td>${r.revenue && r.revenue.total && r.total ? (r.total / r.revenue.total * 100).toFixed(1) + "%" : "·"}</td>` : ""}</tr>`).join("")}
+      <tr class="sum"><td colspan="2"><b>${t("d_total")}</b></td>${dsup.map(x => `<td><b>${fmt(x.buy)}</b></td>`).join("")}<td class="tt">${fmt(T.buy)}</td>${d.revenue_on ? `<td><b>${fmt(d.revenue_total)}</b></td><td><b>${d.revenue_total ? (T.buy / d.revenue_total * 100).toFixed(1) + "%" : "·"}</b></td>` : ""}</tr>
+    </table></div></div>`;
   }
   const recs = d.records.filter(r => !bFilter || r.supplier_id === bFilter);
   const fname = bFilter ? (d.suppliers.find(x => x.id === bFilter) || {}).name : t("b_all_sup");

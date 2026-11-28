@@ -17,7 +17,7 @@ L = {
         "hint": "К оплате = долг на начало + закуп − оплачено. Минус означает переплату (аванс).",
         "months": ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"],
         "mfull": ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"],
-        "page": "Стр.",
+        "page": "Стр.", "daily": "Закуп по дням (по точкам), ₸", "pm": "Закуп по месяцам и точкам, ₸", "month": "Месяц", "dtotal": "Итого", "rev": "Выручка", "pct": "Закуп %", "bypt": "По точкам: закуп и выручка (по сменам)",
     },
     "kk": {
         "title": "Сатып алу есебі", "year": "жыл", "all": "Барлық нүктелер", "point": "Нүкте", "made": "Жасалды",
@@ -28,7 +28,7 @@ L = {
         "hint": "Төлеу керек = басындағы қарыз + сатып алу − төленді. Минус — артық төлем (аванс).",
         "months": ["Қаң", "Ақп", "Нау", "Сәу", "Мам", "Мау", "Шіл", "Там", "Қыр", "Қаз", "Қар", "Жел"],
         "mfull": ["Қаңтар", "Ақпан", "Наурыз", "Сәуір", "Мамыр", "Маусым", "Шілде", "Тамыз", "Қыркүйек", "Қазан", "Қараша", "Желтоқсан"],
-        "page": "Бет",
+        "page": "Бет", "daily": "Күндер бойынша сатып алу (нүктелер), ₸", "pm": "Айлар мен нүктелер бойынша сатып алу, ₸", "month": "Ай", "dtotal": "Барлығы", "rev": "Түсім", "pct": "Сатып алу %", "bypt": "Нүктелер бойынша: сатып алу және түсім (ауысымдар)",
     },
 }
 
@@ -146,6 +146,71 @@ def build(rep: dict, lang: str = "ru") -> bytes:
                 vals = [x["name"]] + [money(v) if v else "·" for v in x[key]] + [money(sum(x[key]))]
                 row(vals, mc, i, size=7)
             row([T["total"]] + [money(v) if v else "·" for v in tot[key]] + [money(sum(tot[key]))], mc, 0, bold=True, size=7)
+
+    # ---- таблица точка × поставщик (как дневная таблица закупа) ----
+    sup_cols = [x for x in sups if x["buy"]] or sups
+
+    rev_on = rep.get("revenue_on")
+    pct = lambda b, r: f"{b / r * 100:.1f}%" if r and b else "·"
+
+    def grid(ttl, rows, first, firstw, label):
+        if not rows:
+            return
+        title(ttl)
+        pw = 26
+        extra = [(T["dtotal"], 20, "R")] + ([(T["rev"], 22, "R"), (T["pct"], 15, "R")] if rev_on else [])
+        nw = max(13.0, (W - firstw - pw - sum(e[1] for e in extra)) / max(1, len(sup_cols)))
+        gc = [(first, firstw, "L"), (T["point"], pw, "L")] + [(x["name"][:14], nw, "R") for x in sup_cols] + extra
+        head(gc)
+        sums = {str(x["id"]): 0.0 for x in sup_cols}
+        rsum = bsum = 0.0
+        prev = None
+        nb = 2 + len(sup_cols)
+        for i, r in enumerate(rows):
+            if pdf.get_y() > pdf.h - 20:
+                pdf.add_page()
+                head(gc)
+            lab = label(r)
+            vals = [lab if lab != prev else "", (r["point"] or "—")[:16]]
+            prev = lab
+            for x in sup_cols:
+                v = r["cells"].get(str(x["id"]), 0)
+                sums[str(x["id"])] += v
+                vals.append(money(v) if v else "·")
+            vals.append(money(r["total"]) if r["total"] else "·")
+            bsum += r["total"]
+            if rev_on:
+                rv = r.get("rev", (r.get("revenue") or {}).get("total", 0.0))
+                rsum += rv
+                vals += [money(rv) if rv else "·", pct(r["total"], rv)]
+            row(vals, gc, i, size=7, colors={nb: ACC})
+        tail = [money(bsum)] + ([money(rsum), pct(bsum, rsum)] if rev_on else [])
+        row([T["dtotal"], ""] + [money(sums[str(x["id"])]) for x in sup_cols] + tail, gc, 0, bold=True, size=7)
+
+    if rev_on and rep.get("by_point"):
+        title(T["bypt"])
+        bc = [(T["point"], W * .4, "L"), (T["buy"], W * .2, "R"), (T["rev"], W * .2, "R"), (T["pct"], W * .2, "R")]
+        head(bc)
+        bp = [(p, x) for p, x in rep["by_point"].items() if p]
+        for i, (p, x) in enumerate(bp):
+            row([p, money(x["buy"]), money(x["revenue"]), pct(x["buy"], x["revenue"])], bc, i)
+        tb, tr = sum(x["buy"] for _, x in bp), sum(x["revenue"] for _, x in bp)
+        row([T["total"], money(tb), money(tr), pct(tb, tr)], bc, 0, bold=True)
+
+    if not month:
+        pm = {(r["month"], r["point"]): dict(r, rev=0.0) for r in rep.get("point_months", [])}
+        for r in rep.get("daily", []):
+            k = (int(r["day"][5:7]), r["point"])
+            rv = (r.get("revenue") or {}).get("total", 0.0)
+            if rv:
+                pm.setdefault(k, {"month": k[0], "point": k[1], "cells": {}, "total": 0.0, "rev": 0.0})["rev"] += rv
+        order = {}
+        for r in rep.get("daily", []):
+            order.setdefault(r["point"], len(order))
+        pm_rows = sorted(pm.values(), key=lambda r: (r["month"], order.get(r["point"], 0)))
+        grid(T["pm"], pm_rows, T["month"], 24, lambda r: T["mfull"][r["month"] - 1])
+    daily = sorted(rep.get("daily", []), key=lambda r: r["day"])
+    grid(T["daily"], daily, T["date"], 22, lambda r: f"{r['day'][8:10]}.{r['day'][5:7]}.{r['day'][:4]}")
 
     # ---- журнал ----
     title(T["journal"])

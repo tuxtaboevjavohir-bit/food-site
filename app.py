@@ -22,7 +22,7 @@ import whatsapp  # noqa: E402
 from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
-APP_VERSION = "2026-11-28.4"
+APP_VERSION = "2026-11-28.6"
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
@@ -346,9 +346,74 @@ def _year(year: int) -> int:
     return year if 2000 <= year <= 2100 else memory.local_now().year
 
 
+def _with_revenue(rep: dict) -> dict:
+    """Добавить в отчёт закупа выручку точек по сменам Paloma (по рабочим дням)."""
+    from datetime import date, timedelta
+    to = (date.fromisoformat(rep["to"]) - timedelta(days=1)).isoformat()
+    try:
+        rv = paloma.revenue(rep["from"], to)
+    except Exception as e:
+        rv = {"connected": paloma.connected(), "points": {}, "errors": [str(e)]}
+    pts = rv.get("points", {})
+    if rep.get("point"):
+        pts = {k: v for k, v in pts.items() if k == rep["point"]}
+    rows = {(r["day"], r["point"]): r for r in rep["daily"]}
+    for p, days in pts.items():
+        for d, v in days.items():
+            if v["total"] and (d, p) not in rows:
+                rows[(d, p)] = {"day": d, "point": p, "cells": {}, "total": 0.0}
+            if (d, p) in rows:
+                rows[(d, p)]["revenue"] = v
+    order = {p: i for i, p in enumerate(memory.points())}
+    rep["daily"] = sorted(rows.values(), key=lambda r: (r["day"], -order.get(r["point"], 99)), reverse=True)
+    by_point = {}
+    for r in rep["daily"]:
+        x = by_point.setdefault(r["point"] or "", {"buy": 0.0, "revenue": 0.0})
+        x["buy"] += r["total"]
+        x["revenue"] += (r.get("revenue") or {}).get("total", 0.0)
+    rep["by_point"] = by_point
+    rep["revenue_total"] = sum(x["revenue"] for x in by_point.values())
+    rep["revenue_on"] = bool(rv.get("connected"))
+    rep["revenue_errors"] = rv.get("errors", [])
+    return rep
+
+
 @app.get("/api/purchases")
-def purchases_get(year: int = 0, month: int = 0, point: str = ""):
-    return memory.purchase_report(_year(year), month if 1 <= month <= 12 else 0, point)
+def purchases_get(year: int = 0, month: int = 0, point: str = "", rev: int = 0):
+    rep = memory.purchase_report(_year(year), month if 1 <= month <= 12 else 0, point)
+    return _with_revenue(rep) if rev else rep
+
+
+class DayIn(BaseModel):
+    day: str
+    cells: dict
+
+
+def _day_revenue(day: str) -> dict:
+    try:
+        rv = paloma.revenue(day, day)
+    except Exception as e:
+        return {"revenue_on": paloma.connected(), "revenue": {}, "revenue_errors": [str(e)]}
+    return {"revenue_on": bool(rv.get("connected")), "revenue_errors": rv.get("errors", []),
+            "revenue": {p: v[day] for p, v in rv.get("points", {}).items() if day in v}}
+
+
+@app.get("/api/purchases/day")
+def purchases_day_get(day: str = "", rev: int = 0):
+    try:
+        d = memory.purchase_day_get(day or memory.local_now().date().isoformat())
+    except ValueError:
+        raise HTTPException(400, "Неверная дата")
+    return {**d, **_day_revenue(d["day"])} if rev else d
+
+
+@app.post("/api/purchases/day")
+def purchases_day_post(body: DayIn):
+    try:
+        n = memory.purchase_day_save(body.day, body.cells)
+    except ValueError:
+        raise HTTPException(400, "Неверная дата")
+    return {**memory.purchase_day_get(body.day), "ok": True, "count": n}
 
 
 @app.post("/api/purchases")
@@ -383,7 +448,7 @@ def purchases_pdf(year: int = 0, month: int = 0, point: str = "", lang: str = "r
 
     y, m = _year(year), (month if 1 <= month <= 12 else 0)
     try:
-        data = ppdf.build(memory.purchase_report(y, m, point), lang)
+        data = ppdf.build(_with_revenue(memory.purchase_report(y, m, point)), lang)
     except FileNotFoundError as e:
         raise HTTPException(500, str(e))
     name = f"Закуп_{y}" + (f"_{m:02d}" if m else "") + (f"_{point}" if point else "") + ".pdf"
