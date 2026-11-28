@@ -11,6 +11,7 @@ APP_TZ — часовой пояс для «сегодня/вчера» (по у
 import json
 import os
 import re
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
@@ -72,16 +73,44 @@ def today() -> date:
         return (datetime.utcnow() + timedelta(hours=5)).date()
 
 
+_locks: dict = {}
+_locks_guard = threading.Lock()
+
+
+def _lock_for(key: str):
+    with _locks_guard:
+        return _locks.setdefault(key, threading.Lock())
+
+
 def _get(key: str, path: str, params: dict | None = None):
-    r = httpx.get(BASE + path, params=params or {}, headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, timeout=30)
-    if r.status_code >= 400:
+    """Запрос к Paloma. Отчёты одного аккаунта строятся строго по одному; «занято» — ждём и повторяем."""
+    is_report = path.startswith("/reports/")
+    lock = _lock_for(key) if is_report else None
+    for attempt in range(8):
+        if lock:
+            lock.acquire()
+        try:
+            r = httpx.get(BASE + path, params=params or {}, headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, timeout=40)
+        finally:
+            if lock:
+                lock.release()
+        if r.status_code < 400:
+            return r.json()
         try:
             err = r.json().get("error", {})
-            msg = f"{err.get('code', r.status_code)}: {err.get('message', '')}"
+            code, message = err.get("code", r.status_code), err.get("message", "")
         except Exception:
-            msg = f"HTTP {r.status_code}"
-        raise RuntimeError(f"Paloma365 {path} — {msg}")
-    return r.json()
+            code, message = r.status_code, ""
+        if code in ("temporarily_unavailable", "rate_limited") or r.status_code in (429, 503):
+            wait = 1.0 + attempt * 0.8
+            try:
+                wait = max(wait, float(r.headers.get("Retry-After", 0)))
+            except ValueError:
+                pass
+            time.sleep(min(wait, 6))
+            continue
+        raise RuntimeError(f"Paloma365 {path} — {code}: {message}")
+    raise RuntimeError(f"Paloma365 {path} — отчёт занят слишком долго, попробуйте ещё раз")
 
 
 def _unwrap(page):
@@ -155,9 +184,27 @@ def _totals(resp: dict) -> dict:
     return {"net": _num(t.get("net")), "orders": _num(t.get("orders"))}
 
 
-def _cached(key, fn, ttl=CACHE_SECONDS):
+_refreshing: set = set()
+
+
+def _cached(key, fn, ttl=CACHE_SECONDS, stale=900):
+    """Кэш: свежее — сразу; устаревшее (до `stale` сек) — тоже сразу, а новое считается в фоне."""
     hit = _cache.get(key)
-    if hit and time.time() - hit[0] < ttl:
+    age = time.time() - hit[0] if hit else None
+    if hit and age < ttl:
+        return hit[1]
+    if hit and age < stale:
+        if key not in _refreshing:
+            _refreshing.add(key)
+
+            def bg():
+                try:
+                    _cache[key] = (time.time(), fn())
+                except Exception:
+                    pass
+                finally:
+                    _refreshing.discard(key)
+            threading.Thread(target=bg, daemon=True).start()
         return hit[1]
     val = fn()
     _cache[key] = (time.time(), val)
@@ -234,6 +281,16 @@ def _merge(lists: list[list[dict]], sort_key=None) -> list[dict]:
     return out
 
 
+def _targets(loc: str):
+    accs = accounts()
+    if loc and loc != "all" and ":" in loc:
+        ai, lid = loc.split(":", 1)
+        a = next((x for x in accs if str(x["idx"]) == ai), None)
+        if a:
+            return [(a, lid or None)]
+    return [(a, None) for a in accs]
+
+
 def report(period: str = "week", loc: str = "all") -> dict:
     """Отчёт за период по всем точкам или одной (loc = 'acc:location_id')."""
     if not connected():
@@ -241,88 +298,123 @@ def report(period: str = "week", loc: str = "all") -> dict:
     return _cached(f"rep:{period}:{loc}", lambda: _build(period, loc), 25 if period == "today" else CACHE_SECONDS)
 
 
+def _metrics(a, lid, frm, to, metrics, group_by, limit=1000):
+    p = {"from": frm.isoformat(), "to": to.isoformat(), "metrics": metrics, "group_by": group_by, "limit": limit}
+    if lid:
+        p["location_id"] = lid
+    try:
+        return _pages(a["key"], "/reports/metrics", p, 10)
+    except RuntimeError as e:
+        if "limit" in str(e).lower() and limit > 200:   # если большой limit не принимают
+            p["limit"] = 200
+            return _pages(a["key"], "/reports/metrics", p, 10)
+        raise
+
+
+def _acc_data(a, lid, period):
+    """Все данные точки за период — 2–3 запроса к Paloma, строго по очереди. Кэшируется."""
+    def load():
+        start, end, pstart, pend, group = _range(period)
+        out = {"errors": [], "moments": None, "days": None}
+        wfrom = min(pstart, start - timedelta(days=1))
+        wto = min(end + timedelta(days=1), today())
+        if period != "month":
+            # один почасовой отчёт: из него выручка, график, прошлый период и смены
+            try:
+                out["moments"] = _moments_day_hour(_metrics(a, lid, wfrom, wto, "net,orders", "day,hour"))
+                if out["moments"] is None:
+                    out["errors"].append("day,hour: неизвестный формат")
+            except Exception as e:
+                out["errors"].append(str(e))
+        if out["moments"] is None:
+            # запасной путь: по дням (месяц) или по часам отдельными запросами
+            try:
+                out["days"] = _rows(_metrics(a, lid, pstart, end, "net,orders", "day"), "day")
+            except Exception as e:
+                out["errors"].append(str(e))
+            if group == "hour":
+                try:
+                    out["hours"] = _rows(_metrics(a, lid, start, end, "net,orders", "hour"), "hour")
+                except Exception as e:
+                    out["errors"].append(str(e))
+        try:
+            out["items"] = _rows(_metrics(a, lid, start, end, "net", "item"), "item", item_names(a))
+        except Exception as e:
+            out["items"] = []
+            out["errors"].append(str(e))
+        return out
+    return _cached(f"acc:{a['idx']}:{lid}:{period}", load, 25 if period in ("today", "yesterday") else CACHE_SECONDS)
+
+
+def _shift_moments(a, lid, period):
+    """Почасовые данные для смен (для месяца — отдельный запрос, для остальных — из _acc_data)."""
+    if period != "month":
+        d = _acc_data(a, lid, period)
+        return d["moments"], d["errors"]
+    def load():
+        start, end, *_ = _range(period)
+        try:
+            m = _moments_day_hour(_metrics(a, lid, start - timedelta(days=1), min(end + timedelta(days=1), today()), "net,orders", "day,hour"))
+            return m, ([] if m is not None else ["day,hour: неизвестный формат"])
+        except Exception as e:
+            return None, [str(e)]
+    return _cached(f"shm:{a['idx']}:{lid}:{period}", load, CACHE_SECONDS)
+
+
 def _build(period: str, loc: str) -> dict:
     start, end, pstart, pend, group = _range(period)
-    accs = accounts()
-    targets = []  # (account, location_id or None)
-    if loc and loc != "all" and ":" in loc:
-        ai, lid = loc.split(":", 1)
-        a = next((x for x in accs if str(x["idx"]) == ai), None)
-        if a:
-            targets.append((a, lid or None))
-    if not targets:
-        targets = [(a, None) for a in accs]
+    targets = _targets(loc)
     res = {"connected": True, "period": period, "from": start.isoformat(), "to": end.isoformat(),
            "prev_from": pstart.isoformat(), "prev_to": pend.isoformat(), "group": group, "errors": []}
-
-    def q(a, lid, frm, to, metrics, group_by):
-        p = {"from": frm.isoformat(), "to": to.isoformat(), "metrics": metrics, "group_by": group_by}
-        if lid:
-            p["location_id"] = lid
-        return _pages(a["key"], "/reports/metrics", p, 5)
-
-    jobs = {}
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        for a, lid in targets:
-            jobs[(a["idx"], lid, "series")] = pool.submit(q, a, lid, start, end, "net,orders", group)
-            jobs[(a["idx"], lid, "prev")] = pool.submit(q, a, lid, pstart, pend, "net,orders", group)
-            jobs[(a["idx"], lid, "item")] = pool.submit(q, a, lid, start, end, "net", "item")
-            if lid is None:
-                jobs[(a["idx"], lid, "loc")] = pool.submit(q, a, lid, start, end, "net,orders", "location")
-            if period == "month":
-                jobs[(a["idx"], lid, "wd")] = pool.submit(q, a, lid, start, end, "net,orders", "weekday")
-
-    def get(k):
-        try:
-            return jobs[k].result()
-        except Exception as e:
-            res["errors"].append(str(e))
-            return None
-
-    series, items, locs, wds = [], [], [], []
-    tot = {"net": 0.0, "orders": 0.0}
-    prev = {"net": 0.0, "orders": 0.0}
-    for a, lid in targets:
-        def add(resp, into):
-            """Итог = сумма строк; если строк нет — поле totals из ответа."""
-            rows = _rows(resp, group)
-            if rows:
-                into["net"] += sum(r["net"] or 0 for r in rows)
-                into["orders"] += sum(r["orders"] or 0 for r in rows)
-            else:
-                t = _totals(resp)
-                into["net"] += t["net"] or 0
-                into["orders"] += t["orders"] or 0
-            return rows
-        s = get((a["idx"], lid, "series"))
-        if s:
-            series.append(add(s, tot))
-        p = get((a["idx"], lid, "prev"))
-        if p:
-            add(p, prev)
-        it = get((a["idx"], lid, "item"))
-        if it:
-            items.append(_rows(it, "item", item_names(a)))
-        if (a["idx"], lid, "loc") in jobs:
-            lr = get((a["idx"], lid, "loc"))
-            if lr:
-                rows = _rows(lr, "location")
-                for r in rows:
-                    if a.get("named"):
-                        r["label"] = a["name"] if len(rows) == 1 else f"{a['name']} · {r['label']}"
-                    elif r["label"] in ("None", "") or (len(accounts()) > 1 and len(rows) == 1 and not r["label"]):
-                        r["label"] = a["name"]
-                locs.append(rows)
-        if (a["idx"], lid, "wd") in jobs:
-            w = get((a["idx"], lid, "wd"))
-            if w:
-                wds.append(_rows(w, "weekday"))
-    res["totals"] = tot
-    res["prev"] = prev
-    res["series"] = _merge(series)
+    with ThreadPoolExecutor(max_workers=6) as pool:   # точки — параллельно, внутри точки — по очереди
+        datas = list(pool.map(lambda t: (t, _acc_data(t[0], t[1], period)), targets))
+    tot, prev = {"net": 0.0, "orders": 0.0}, {"net": 0.0, "orders": 0.0}
+    series, items, locs, wds = {}, [], [], {}
+    for (a, lid), d in datas:
+        res["errors"] += d["errors"]
+        acc_tot = {"net": 0.0, "orders": 0.0}
+        if d.get("moments") is not None:
+            for dt, net, orders in d["moments"]:
+                day = dt.date()
+                if start <= day <= end:
+                    acc_tot["net"] += net; acc_tot["orders"] += orders
+                    k = dt.hour if group == "hour" else day.isoformat()
+                    srow = series.setdefault(k, {"label": f"{dt.hour:02d}:00" if group == "hour" else day.isoformat(), "id": k, "net": 0.0, "orders": 0.0})
+                    srow["net"] += net; srow["orders"] += orders
+                    if period == "month":
+                        w = wds.setdefault(day.isoweekday(), {"label": str(day.isoweekday()), "id": day.isoweekday(), "net": 0.0, "orders": 0.0})
+                        w["net"] += net; w["orders"] += orders
+                elif pstart <= day <= pend:
+                    prev["net"] += net; prev["orders"] += orders
+        else:
+            for r in d.get("days") or []:
+                day = _date_of(r["id"]) or _date_of(r["label"])
+                if not day:
+                    continue
+                if start <= day <= end:
+                    acc_tot["net"] += r["net"] or 0; acc_tot["orders"] += r["orders"] or 0
+                    if group == "day":
+                        srow = series.setdefault(day.isoformat(), {"label": day.isoformat(), "id": day.isoformat(), "net": 0.0, "orders": 0.0})
+                        srow["net"] += r["net"] or 0; srow["orders"] += r["orders"] or 0
+                    if period == "month":
+                        w = wds.setdefault(day.isoweekday(), {"label": str(day.isoweekday()), "id": day.isoweekday(), "net": 0.0, "orders": 0.0})
+                        w["net"] += r["net"] or 0; w["orders"] += r["orders"] or 0
+                elif pstart <= day <= pend:
+                    prev["net"] += r["net"] or 0; prev["orders"] += r["orders"] or 0
+            for r in d.get("hours") or []:
+                h = _hour_of(r["id"] if r["id"] is not None else r["label"])
+                if h is None:
+                    continue
+                srow = series.setdefault(h, {"label": f"{h:02d}:00", "id": h, "net": 0.0, "orders": 0.0})
+                srow["net"] += r["net"] or 0; srow["orders"] += r["orders"] or 0
+        tot["net"] += acc_tot["net"]; tot["orders"] += acc_tot["orders"]
+        items.append(d.get("items") or [])
+        locs.append([{"label": a["name"], "id": a["idx"], "net": acc_tot["net"], "orders": acc_tot["orders"]}])
+    res["totals"], res["prev"] = tot, prev
+    res["series"] = sorted(series.values(), key=lambda r: r["id"] if isinstance(r["id"], int) else str(r["id"]))
     res["by_item"] = _merge(items, "net")
-    res["by_location"] = _merge(locs, "net")
-    res["by_weekday"] = _merge(wds) if wds else []
+    res["by_location"] = _merge(locs, "net") if len(targets) > 1 else []
+    res["by_weekday"] = sorted(wds.values(), key=lambda r: r["id"])
     res["errors"] = list(dict.fromkeys(res["errors"]))
     return res
 
@@ -472,46 +564,20 @@ def shift_report(period: str = "week", loc: str = "all") -> dict:
 def _build_shifts(period: str, loc: str) -> dict:
     start, end, *_ = _range(period)
     cfg = shifts_cfg()
-    q_end = min(end + timedelta(days=1), today())   # ночная смена заканчивается на следующий день
-    accs = accounts()
-    targets = []
-    if loc and loc != "all" and ":" in loc:
-        ai, lid = loc.split(":", 1)
-        a = next((x for x in accs if str(x["idx"]) == ai), None)
-        if a:
-            targets.append((a, lid or None))
-    if not targets:
-        targets = [(a, None) for a in accs]
-    res = {"connected": True, "from": start.isoformat(), "to": end.isoformat(), "shifts": cfg, "errors": [], "method": None}
-    buckets = {}  # (date, shift) -> {net, orders, by_point{}}
-
-    def load(a, lid):
-        base = {"from": start.isoformat(), "to": q_end.isoformat()}
-        if lid:
-            base["location_id"] = lid
-        errs = []
-        for group_by, parser, method in (("day,hour", _moments_day_hour, "day×hour"), ("receipt", _moments_receipts, "receipts")):
-            try:
-                resp = _pages(a["key"], "/reports/metrics", dict(base, metrics="net,orders" if group_by != "receipt" else "net", group_by=group_by), 30)
-                m = parser(resp)
-                if m is not None:
-                    return m, method, errs
-                errs.append(f"{group_by}: неизвестный формат")
-            except Exception as e:
-                errs.append(f"{group_by}: {e}")
-        return None, None, errs
-
+    targets = _targets(loc)
+    overnight = {s["name"] for s in cfg if int(s["start"]) > int(s["end"])}
+    res = {"connected": True, "from": start.isoformat(), "to": end.isoformat(), "shifts": cfg, "errors": [], "method": "day×hour"}
+    buckets = {}
     with ThreadPoolExecutor(max_workers=6) as pool:
-        futs = [(a, pool.submit(load, a, lid)) for a, lid in targets]
-    for a, f in futs:
-        moments, method, errs = f.result()
+        datas = list(pool.map(lambda t: (t, _shift_moments(t[0], t[1], period)), targets))
+    for (a, lid), (moments, errs) in datas:
         if moments is None:
             res["errors"].append(f"{a['name']}: " + "; ".join(errs))
             continue
-        res["method"] = method
         for dt, net, orders in moments:
             sd, sname = _shift_of(dt, cfg)
-            if sd < start or sd > end:
+            # в период входят смены, начавшиеся в нём, и ночная смена накануне первого дня (она заканчивается уже в периоде)
+            if not (start <= sd <= end or (sd == start - timedelta(days=1) and sname in overnight)):
                 continue
             b = buckets.setdefault((sd.isoformat(), sname), {"date": sd.isoformat(), "shift": sname, "net": 0.0, "orders": 0.0, "by_point": {}})
             b["net"] += net
@@ -532,6 +598,7 @@ def _build_shifts(period: str, loc: str) -> dict:
         now = datetime.utcnow() + timedelta(hours=5)
     cd, cs = _shift_of(now, cfg)
     res["current"] = {"date": cd.isoformat(), "shift": cs}
+    res["errors"] = list(dict.fromkeys(res["errors"]))
     return res
 
 
@@ -550,16 +617,6 @@ def _money(v):
     if isinstance(v, dict):
         v = v.get("amount", v.get("value"))
     return _num(v)
-
-
-def _targets(loc: str):
-    accs = accounts()
-    if loc and loc != "all" and ":" in loc:
-        ai, lid = loc.split(":", 1)
-        a = next((x for x in accs if str(x["idx"]) == ai), None)
-        if a:
-            return [(a, lid or None)]
-    return [(a, None) for a in accs]
 
 
 def orders(period: str = "today", loc: str = "all", limit: int = 150) -> dict:
