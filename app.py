@@ -22,7 +22,7 @@ import whatsapp  # noqa: E402
 from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
-APP_VERSION = "2026-11-28.8"
+APP_VERSION = "2026-11-28.9"
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
@@ -414,6 +414,25 @@ def _day_revenue(day: str) -> dict:
         return {"revenue_on": paloma.connected(), "revenue": {}, "revenue_errors": [str(e)]}
     return {"revenue_on": bool(rv.get("connected")), "revenue_errors": rv.get("errors", []),
             "revenue": {p: v[day] for p, v in rv.get("points", {}).items() if day in v}}
+
+
+@app.get("/api/purchases/shares")
+def purchases_shares(day: str = "", days: int = 1):
+    """Доля каждой точки в выручке (по сменам) за `days` дней, заканчивая `day` — чтобы делить закуп."""
+    from datetime import date, timedelta
+    try:
+        end = date.fromisoformat(day) if day else memory.local_now().date()
+    except ValueError:
+        raise HTTPException(400, "Неверная дата")
+    days = max(1, min(days, 92))
+    start = end - timedelta(days=days - 1)
+    rv = paloma.revenue(start.isoformat(), end.isoformat())
+    tot = {p: sum(v["total"] for v in d.values()) for p, d in rv.get("points", {}).items()}
+    pts = memory.points()
+    rev = {p: tot.get(p, 0.0) for p in pts}
+    all_ = sum(rev.values())
+    return {"connected": rv.get("connected", False), "from": start.isoformat(), "to": end.isoformat(), "revenue": rev, "total": all_,
+            "shares": {p: (v / all_ if all_ else 0.0) for p, v in rev.items()}, "errors": rv.get("errors", [])}
 
 
 @app.get("/api/purchases/day")

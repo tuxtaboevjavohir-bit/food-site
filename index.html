@@ -167,6 +167,11 @@
   .dgrid td.rev{text-align:right;line-height:1.25}.dgrid td.rev small{display:block;font-size:11px;color:var(--mute)}
   .dgrid td.rev span{color:#34d399}
   .dgrid td.pct,.dgrid td.left{text-align:right}
+  .split{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;padding:10px;border:1px dashed #22d3ee55;border-radius:10px;background:#03060d55}
+  .split select,.split input{background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px;font:inherit;min-width:0}
+  .split input{width:150px;text-align:right}
+  #spInfo{font-size:13px;color:var(--mute);margin-top:6px}#spInfo b{color:var(--txt)}
+  .dgrid input.flash{border-color:#a855f7;box-shadow:0 0 10px #a855f788}
   .dinp{background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px;font:inherit}
   .dtab td,.dtab th{text-align:right;white-space:nowrap}.dtab td:nth-child(-n+2),.dtab th:nth-child(-n+2){text-align:left}
   .dtab td.tt{color:#67e8f9;font-weight:700}
@@ -297,6 +302,14 @@
         <h3 style="margin:0" data-i18n="d_h">🗓 Закуп за день</h3>
         <div class="row" style="gap:8px;flex-wrap:wrap"><input type="date" id="dDay" class="dinp"><span id="dSaved" style="font-size:12px;color:var(--mute)"></span></div>
       </div>
+      <div class="split">
+        <b data-i18n="sp_h">➗ Разделить сумму по точкам:</b>
+        <select id="spSup"></select>
+        <input type="text" inputmode="decimal" id="spAmt" autocomplete="off" data-i18n-ph="sp_amt" placeholder="Общая сумма, ₸">
+        <select id="spBase"><option value="1" data-i18n="sp_b1">по выручке этого дня</option><option value="7" data-i18n="sp_b7">по выручке за 7 дней</option><option value="30" data-i18n="sp_b30">по выручке за 30 дней</option></select>
+        <button class="main" id="spGo" style="padding:8px 14px" data-i18n="sp_go">Разделить</button>
+      </div>
+      <div id="spInfo"></div>
       <div class="md" style="overflow-x:auto;margin-top:10px"><table class="dgrid" id="dGrid"></table></div>
       <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">
         <button class="main" id="dSave" style="padding:10px 18px" data-i18n="d_save">💾 Сохранить день</button>
@@ -451,6 +464,9 @@ const I18N = {
     i_total:"Всего товаров", i_sold:"продавались за период", i_sold_sum:"Продано на",
     t_shifts:"По сменам", shifts_n:"смен", k_avg_shift:"в среднем за смену", date:"Дата", shift:"Смена", now:"сейчас", no_data:"Нет данных за период.",
     err_server:"Ошибка сервера", miss_h:"На GitHub загружены не все новые файлы:", miss_t:"Загрузите их (Add file → Upload files), иначе часть функций не работает.",
+    sp_h:"➗ Разделить сумму по точкам:", sp_amt:"Общая сумма, ₸", sp_b1:"по выручке этого дня", sp_b7:"по выручке за 7 дней", sp_b30:"по выручке за 30 дней", sp_go:"Разделить",
+    sp_norev:"Нет выручки за этот период — делить не по чему. Выберите 7 или 30 дней.", sp_off:"Paloma не подключена — делить по выручке нельзя.", sp_done:"Разделено", sp_check:"Проверьте и нажмите «Сохранить день».",
+    sp_choose:"Выберите поставщика и введите сумму",
     sh_checks:"чеков", sh_total:"Все точки", sh_share:"доля выручки",
     tab_buy:"Закуп", buy_h:"Закуп и оплаты поставщикам", b_pdf:"📄 Скачать PDF", b_new:"Новая запись", b_edit:"Изменить запись", b_k_buy:"📦 Закуп", b_k_pay:"💳 Оплата",
     b_amt:"Сумма, ₸", b_note:"Комментарий (накладная, что привезли)", b_hint:"«Закуп» — сколько привёз поставщик (долг растёт). «Оплата» — сколько вы ему заплатили (долг уменьшается).",
@@ -526,6 +542,9 @@ const I18N = {
     i_total:"Барлық тауар", i_sold:"кезеңде сатылғаны", i_sold_sum:"Сатылды",
     t_shifts:"Ауысымдар бойынша", shifts_n:"ауысым", k_avg_shift:"бір ауысымға орташа", date:"Күні", shift:"Ауысым", now:"қазір", no_data:"Кезең бойынша дерек жоқ.",
     err_server:"Сервер қатесі", miss_h:"GitHub-қа барлық жаңа файлдар жүктелмеген:", miss_t:"Оларды жүктеңіз (Add file → Upload files), әйтпесе кейбір функциялар жұмыс істемейді.",
+    sp_h:"➗ Соманы нүктелерге бөлу:", sp_amt:"Жалпы сома, ₸", sp_b1:"осы күннің түсімі бойынша", sp_b7:"7 күннің түсімі бойынша", sp_b30:"30 күннің түсімі бойынша", sp_go:"Бөлу",
+    sp_norev:"Бұл кезеңде түсім жоқ. 7 немесе 30 күнді таңдаңыз.", sp_off:"Paloma қосылмаған — түсім бойынша бөлу мүмкін емес.", sp_done:"Бөлінді", sp_check:"Тексеріп, «Күнді сақтау» басыңыз.",
+    sp_choose:"Жеткізушіні таңдап, соманы енгізіңіз",
     sh_checks:"чек", sh_total:"Барлық нүктелер", sh_share:"түсім үлесі",
     tab_buy:"Сатып алу", buy_h:"Жеткізушілерден сатып алу және төлемдер", b_pdf:"📄 PDF жүктеу", b_new:"Жаңа жазба", b_edit:"Жазбаны өзгерту", b_k_buy:"📦 Сатып алу", b_k_pay:"💳 Төлем",
     b_amt:"Сома, ₸", b_note:"Түсініктеме (жүкқұжат, не әкелді)", b_hint:"«Сатып алу» — жеткізуші қанша әкелді (қарыз өседі). «Төлем» — сіз қанша төледіңіз (қарыз азаяды).",
@@ -1023,6 +1042,7 @@ function renderDay(){
   $("#dGrid").innerHTML = `<tr><th>${t("point")}</th>${S.map(s => `<th>${esc(s.name)}</th>`).join("")}<th>${t("d_total")}</th><th>${t("d_rev")}</th><th>${t("d_pct")}</th><th>${t("d_left")}</th></tr>` +
     P.map((p, i) => `<tr data-p="${i}"><td><b>${esc(p)}</b></td>${S.map(s => { const v = (DAY.cells[p] || {})[s.id]; return `<td><input inputmode="decimal" autocomplete="off" data-s="${s.id}" value="${fmtIn(v)}" placeholder="0"></td>`; }).join("")}<td class="tot">0</td><td class="rev"><small>…</small></td><td class="pct"></td><td class="left"></td></tr>`).join("") +
     `<tr class="sum"><td>${t("d_total")}</td>${S.map(s => `<td data-cs="${s.id}">0</td>`).join("")}<td class="tot" id="dGrand">0</td><td class="rev" id="dRevAll">…</td><td class="pct" id="dPctAll"></td><td class="left" id="dLeftAll"></td></tr>`;
+  const spc = $("#spSup").value; $("#spSup").innerHTML = `<option value="">— ${t("b_sup")} —</option>` + S.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join(""); $("#spSup").value = spc;
   $("#dSaved").textContent = DAY.saved ? `${t("d_saved_at")} ${DAY.saved.slice(11, 16)}` : "";
   $("#dMsg").innerHTML = DAY.other ? `<small>+ ${DAY.other} ${t("d_other")}</small>` : "";
   dDirty = false;
@@ -1073,6 +1093,28 @@ $("#dSave").onclick = async () => {
 };
 $("#dCopy").onclick = async () => { try { await navigator.clipboard.writeText(dText()); $("#dMsg").innerHTML = t("d_copied"); setTimeout(() => $("#dMsg").innerHTML = "", 2500); } catch { prompt("", dText()); } };
 $("#dWa").onclick = () => window.open("https://wa.me/?text=" + encodeURIComponent(dText()), "_blank");
+// ---------- разделить сумму поставщика по точкам по доле выручки ----------
+moneyInput($("#spAmt"));
+$("#spAmt").onkeydown = e => { if (e.key === "Enter") $("#spGo").click(); };
+$("#spGo").onclick = async () => {
+  const info = $("#spInfo"), sid = $("#spSup").value, amt = Math.round(dNum($("#spAmt").value));
+  if (!sid || !(amt > 0)) { info.innerHTML = `<span class="err">${t("sp_choose")}</span>`; return; }
+  info.innerHTML = `<small>${t("loading")}</small>`;
+  let r; try { r = await bApi(`/api/purchases/shares?day=${$("#dDay").value}&days=${$("#spBase").value}`); } catch (e) { info.innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  if (!r.connected) { info.innerHTML = `<span class="err">${t("sp_off")}</span>`; return; }
+  if (!r.total) { info.innerHTML = `<span class="err">${t("sp_norev")}</span>`; return; }
+  // делим: округляем до тенге, остаток — точке с наибольшей долей, чтобы сумма сошлась ровно
+  const P = DAY.points, parts = P.map(p => Math.floor(amt * (r.shares[p] || 0)));
+  const rest = amt - parts.reduce((a, b) => a + b, 0), top = P.reduce((bi, p, i) => (r.shares[p] || 0) > (r.shares[P[bi]] || 0) ? i : bi, 0);
+  parts[top] += rest;
+  $("#dGrid").querySelectorAll("tr[data-p]").forEach(tr => { const i = +tr.dataset.p, inp = tr.querySelector(`input[data-s="${sid}"]`);
+    if (inp) { inp.value = parts[i] ? fmtIn(parts[i]) : ""; inp.classList.add("flash"); setTimeout(() => inp.classList.remove("flash"), 2500); } });
+  dDirty = true; dTotals();
+  const sname = (DAY.suppliers.find(x => x.id == sid) || {}).name || "";
+  const per = r.from === r.to ? r.from.slice(8, 10) + "." + r.from.slice(5, 7) : `${r.from.slice(8, 10)}.${r.from.slice(5, 7)}–${r.to.slice(8, 10)}.${r.to.slice(5, 7)}`;
+  info.innerHTML = `✅ ${t("sp_done")}: <b>${esc(sname)} ${fmt(amt)} ₸</b> (${t("d_rev")} ${per}: ${fmt(r.total)} ₸) → ` +
+    P.map((p, i) => `${esc(p)} <b>${((r.shares[p] || 0) * 100).toFixed(1)}%</b> = <b>${fmt(parts[i])} ₸</b>`).join(" · ") + `. ${t("sp_check")}`;
+};
 // ---------- закуп ----------
 let BUY = null, BSUPS = [], bKind = "buy", bEdit = null, bFilter = 0;
 const MON = () => LANG === "kk" ? ["Қаңтар","Ақпан","Наурыз","Сәуір","Мамыр","Маусым","Шілде","Тамыз","Қыркүйек","Қазан","Қараша","Желтоқсан"] : ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
