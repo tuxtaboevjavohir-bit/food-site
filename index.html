@@ -306,7 +306,7 @@
         <b data-i18n="sp_h">➗ Разделить сумму по точкам:</b>
         <select id="spSup"></select>
         <input type="text" inputmode="decimal" id="spAmt" autocomplete="off" data-i18n-ph="sp_amt" placeholder="Общая сумма, ₸">
-        <select id="spBase"><option value="1" data-i18n="sp_b1">по выручке этого дня</option><option value="7" data-i18n="sp_b7">по выручке за 7 дней</option><option value="30" data-i18n="sp_b30">по выручке за 30 дней</option></select>
+        <select id="spBase"><option value="1" data-i18n="sp_b1">по вчерашней выручке</option><option value="7" data-i18n="sp_b7">по выручке за 7 дней (до вчера)</option><option value="30" data-i18n="sp_b30">по выручке за 30 дней (до вчера)</option></select>
         <button class="main" id="spGo" style="padding:8px 14px" data-i18n="sp_go">Разделить</button>
       </div>
       <div id="spInfo"></div>
@@ -464,7 +464,7 @@ const I18N = {
     i_total:"Всего товаров", i_sold:"продавались за период", i_sold_sum:"Продано на",
     t_shifts:"По сменам", shifts_n:"смен", k_avg_shift:"в среднем за смену", date:"Дата", shift:"Смена", now:"сейчас", no_data:"Нет данных за период.",
     err_server:"Ошибка сервера", miss_h:"На GitHub загружены не все новые файлы:", miss_t:"Загрузите их (Add file → Upload files), иначе часть функций не работает.",
-    sp_h:"➗ Разделить сумму по точкам:", sp_amt:"Общая сумма, ₸", sp_b1:"по выручке этого дня", sp_b7:"по выручке за 7 дней", sp_b30:"по выручке за 30 дней", sp_go:"Разделить",
+    sp_h:"➗ Разделить сумму по точкам:", sp_amt:"Общая сумма, ₸", sp_b1:"по вчерашней выручке", sp_b7:"по выручке за 7 дней (до вчера)", sp_b30:"по выручке за 30 дней (до вчера)", sp_go:"Разделить",
     sp_norev:"Нет выручки за этот период — делить не по чему. Выберите 7 или 30 дней.", sp_off:"Paloma не подключена — делить по выручке нельзя.", sp_done:"Разделено", sp_check:"Проверьте и нажмите «Сохранить день».",
     sp_choose:"Выберите поставщика и введите сумму",
     sh_checks:"чеков", sh_total:"Все точки", sh_share:"доля выручки",
@@ -542,7 +542,7 @@ const I18N = {
     i_total:"Барлық тауар", i_sold:"кезеңде сатылғаны", i_sold_sum:"Сатылды",
     t_shifts:"Ауысымдар бойынша", shifts_n:"ауысым", k_avg_shift:"бір ауысымға орташа", date:"Күні", shift:"Ауысым", now:"қазір", no_data:"Кезең бойынша дерек жоқ.",
     err_server:"Сервер қатесі", miss_h:"GitHub-қа барлық жаңа файлдар жүктелмеген:", miss_t:"Оларды жүктеңіз (Add file → Upload files), әйтпесе кейбір функциялар жұмыс істемейді.",
-    sp_h:"➗ Соманы нүктелерге бөлу:", sp_amt:"Жалпы сома, ₸", sp_b1:"осы күннің түсімі бойынша", sp_b7:"7 күннің түсімі бойынша", sp_b30:"30 күннің түсімі бойынша", sp_go:"Бөлу",
+    sp_h:"➗ Соманы нүктелерге бөлу:", sp_amt:"Жалпы сома, ₸", sp_b1:"кешегі түсім бойынша", sp_b7:"7 күннің түсімі бойынша (кешеге дейін)", sp_b30:"30 күннің түсімі бойынша (кешеге дейін)", sp_go:"Бөлу",
     sp_norev:"Бұл кезеңде түсім жоқ. 7 немесе 30 күнді таңдаңыз.", sp_off:"Paloma қосылмаған — түсім бойынша бөлу мүмкін емес.", sp_done:"Бөлінді", sp_check:"Тексеріп, «Күнді сақтау» басыңыз.",
     sp_choose:"Жеткізушіні таңдап, соманы енгізіңіз",
     sh_checks:"чек", sh_total:"Барлық нүктелер", sh_share:"түсім үлесі",
@@ -1100,7 +1100,9 @@ $("#spGo").onclick = async () => {
   const info = $("#spInfo"), sid = $("#spSup").value, amt = Math.round(dNum($("#spAmt").value));
   if (!sid || !(amt > 0)) { info.innerHTML = `<span class="err">${t("sp_choose")}</span>`; return; }
   info.innerHTML = `<small>${t("loading")}</small>`;
-  let r; try { r = await bApi(`/api/purchases/shares?day=${$("#dDay").value}&days=${$("#spBase").value}`); } catch (e) { info.innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  const yd = new Date($("#dDay").value + "T12:00:00"); yd.setDate(yd.getDate() - 1);
+  const yday = `${yd.getFullYear()}-${String(yd.getMonth() + 1).padStart(2, "0")}-${String(yd.getDate()).padStart(2, "0")}`;
+  let r; try { r = await bApi(`/api/purchases/shares?day=${yday}&days=${$("#spBase").value}`); } catch (e) { info.innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
   if (!r.connected) { info.innerHTML = `<span class="err">${t("sp_off")}</span>`; return; }
   if (!r.total) { info.innerHTML = `<span class="err">${t("sp_norev")}</span>`; return; }
   // делим: округляем до тенге, остаток — точке с наибольшей долей, чтобы сумма сошлась ровно
