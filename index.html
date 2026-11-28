@@ -455,6 +455,8 @@ const I18N = {
     sp_norev:"Нет выручки за этот период — делить не по чему. Выберите 7 или 30 дней.", sp_off:"Paloma не подключена — делить по выручке нельзя.", sp_done:"Разделено", sp_check:"Проверьте и нажмите «Сохранить день».",
     sp_choose:"Выберите поставщика и введите сумму",
     h_days:"📅 Сохранённые дни", h_click:"нажмите на дату — откроется отчёт дня", h_open:"Открыть", h_empty:"Пока нет сохранённых дней.", h_sups_hint:"добавить, переименовать",
+    d_save_on:"Сохранить", d_ok2:"сохранено", d_moved:"Суммы перенесены на {d}. Нажмите «Сохранить», чтобы записать их на эту дату.",
+    d_replace:"За {d} уже есть сохранённый закуп. Заменить его суммами, которые вы ввели?\n\nOK — заменить, Отмена — открыть сохранённое за {d}.", d_empty_save:"Таблица за {d} пустая. Сохранить пустой день (сохранённое за эту дату удалится)?",
     sh_checks:"чеков", sh_total:"Все точки", sh_share:"доля выручки",
     tab_buy:"Закуп", buy_h:"Закуп и оплаты поставщикам", b_pdf:"📄 Скачать PDF", b_new:"Новая запись", b_edit:"Изменить запись", b_k_buy:"📦 Закуп", b_k_pay:"💳 Оплата",
     b_amt:"Сумма, ₸", b_note:"Комментарий (накладная, что привезли)", b_hint:"«Закуп» — сколько привёз поставщик (долг растёт). «Оплата» — сколько вы ему заплатили (долг уменьшается).",
@@ -534,6 +536,8 @@ const I18N = {
     sp_norev:"Бұл кезеңде түсім жоқ. 7 немесе 30 күнді таңдаңыз.", sp_off:"Paloma қосылмаған — түсім бойынша бөлу мүмкін емес.", sp_done:"Бөлінді", sp_check:"Тексеріп, «Күнді сақтау» басыңыз.",
     sp_choose:"Жеткізушіні таңдап, соманы енгізіңіз",
     h_days:"📅 Сақталған күндер", h_click:"күнді басыңыз — сол күннің есебі ашылады", h_open:"Ашу", h_empty:"Әзірге сақталған күн жоқ.", h_sups_hint:"қосу, атын өзгерту",
+    d_save_on:"Сақтау", d_ok2:"сақталды", d_moved:"Сомалар {d} күніне ауыстырылды. Осы күнге жазу үшін «Сақтау» басыңыз.",
+    d_replace:"{d} күніне сақталған сатып алу бар. Оны енгізген сомаларыңызбен ауыстыру керек пе?\n\nOK — ауыстыру, Болдырмау — {d} сақталғанын ашу.", d_empty_save:"{d} кестесі бос. Бос күнді сақтау керек пе (осы күнгі сақталған өшеді)?",
     sh_checks:"чек", sh_total:"Барлық нүктелер", sh_share:"түсім үлесі",
     tab_buy:"Сатып алу", buy_h:"Жеткізушілерден сатып алу және төлемдер", b_pdf:"📄 PDF жүктеу", b_new:"Жаңа жазба", b_edit:"Жазбаны өзгерту", b_k_buy:"📦 Сатып алу", b_k_pay:"💳 Төлем",
     b_amt:"Сома, ₸", b_note:"Түсініктеме (жүкқұжат, не әкелді)", b_hint:"«Сатып алу» — жеткізуші қанша әкелді (қарыз өседі). «Төлем» — сіз қанша төледіңіз (қарыз азаяды).",
@@ -1056,7 +1060,7 @@ function renderDay(){
     moneyInput(inp); inp.addEventListener("input", () => { dDirty = true; dTotals(); });
     inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); const all = [...$("#dGrid").querySelectorAll("input")]; const n = all[all.indexOf(inp) + 1]; n ? n.focus() : $("#dSave").click(); } };
   });
-  dTotals();
+  dTotals(); dSaveLabel();
 }
 function dCollect(){
   const cells = {};
@@ -1072,9 +1076,31 @@ function dTotals(){
   $("#dGrand").textContent = fmt(g);
 }
 const flashMsg = (html, ms = 3000) => { $("#dMsg").innerHTML = html; setTimeout(() => { if ($("#dMsg").innerHTML === html) $("#dMsg").innerHTML = ""; }, ms); };
-$("#dDay").onchange = () => { if (dDirty && !confirm(t("d_unsaved") + ". OK?")) return; $("#spInfo").innerHTML = ""; loadDay(); };
+let dPrevDay = "";
+$("#dDay").onfocus = () => { dPrevDay = DAY ? DAY.day : $("#dDay").value; };
+$("#dDay").onchange = async () => {
+  const nd = $("#dDay").value; if (!nd) return;
+  $("#spInfo").innerHTML = "";
+  if (dDirty && Object.values(dCollect()).some(c => Object.keys(c).length)) {
+    // есть несохранённые суммы — переносим их на новую дату, а не теряем
+    const cells = dCollect(); let target;
+    try { target = await bApi("/api/purchases/day?day=" + nd); } catch (e) { $("#dMsg").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+    const had = Object.values(target.cells || {}).some(c => Object.keys(c).length);
+    if (had && !confirm(t("d_replace").replace("{d}", dmy(nd)))) { DAY = target; renderDay(); dSaveLabel(); return; }
+    DAY = {...target, cells}; renderDay(); dDirty = true; dSaveLabel();
+    $("#dMsg").innerHTML = `<span style="color:#fbbf24">${t("d_moved").replace("{d}", dmy(nd))}</span>`;
+    return;
+  }
+  await loadDay(); dSaveLabel();
+};
+function dSaveLabel(){ const d = $("#dDay").value; $("#dSave").textContent = `💾 ${t("d_save_on")} ${d ? dmy(d) : ""}`; }
 $("#dSave").onclick = async () => {
-  try { DAY = await bApi("/api/purchases/day", "POST", {day: $("#dDay").value, cells: dCollect()}); renderDay(); flashMsg(t("d_ok")); $("#spInfo").innerHTML = ""; loadBuyDays(); }
+  const day = $("#dDay").value, cells = dCollect();
+  if (!Object.values(cells).some(c => Object.keys(c).length) && !confirm(t("d_empty_save").replace("{d}", dmy(day)))) return;
+  try { DAY = await bApi("/api/purchases/day", "POST", {day, cells}); renderDay();
+    flashMsg(`✅ ${dmy(day)} — ${t("d_ok2")} (${fmt(Object.values(cells).reduce((a, c) => a + Object.values(c).reduce((x, y) => x + y, 0), 0))} ₸)`, 5000); $("#spInfo").innerHTML = "";
+    const [y, m] = day.split("-"); if ($("#bYear").value !== y) $("#bYear").value = y; if ($("#bMonth").value !== "0" && +$("#bMonth").value !== +m) $("#bMonth").value = String(+m);
+    await loadBuyDays(); const tr = document.querySelector(`.hrow[data-d="${day}"]`); if (tr) { tr.classList.add("new-flash"); setTimeout(() => tr.classList.remove("new-flash"), 2500); } }
   catch (e) { $("#dMsg").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
 };
 $("#dCopy").onclick = async () => { if (await copyText(dayText($("#dDay").value, dCollect(), DAY.suppliers, DAY.points))) flashMsg(t("d_copied"), 2500); };
