@@ -12,7 +12,7 @@ import hashlib  # noqa: E402
 import hmac  # noqa: E402
 
 from fastapi import Request  # noqa: E402
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse  # noqa: E402
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 import agents  # noqa: E402
@@ -22,7 +22,7 @@ import whatsapp  # noqa: E402
 from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
-APP_VERSION = "2026-11-28.3"
+APP_VERSION = "2026-11-28.4"
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
@@ -292,6 +292,103 @@ def stock_mv(sid: int, body: MoveIn):
 def stock_del(sid: int):
     memory.stock_delete(sid)
     return {"items": memory.stock_list()}
+
+
+# ---------- закуп ----------
+class SupplierIn(BaseModel):
+    name: str
+    active: bool = True
+
+
+class PurchaseIn(BaseModel):
+    supplier_id: int
+    kind: str = "buy"
+    amount: float
+    day: str = ""
+    point: str = ""
+    note: str = ""
+
+
+def _sup_payload():
+    return {"suppliers": memory.supplier_list(), "points": memory.points()}
+
+
+@app.get("/api/suppliers")
+def suppliers_get():
+    return _sup_payload()
+
+
+@app.post("/api/suppliers")
+def suppliers_post(body: SupplierIn):
+    try:
+        memory.supplier_add(body.name)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return _sup_payload()
+
+
+@app.put("/api/suppliers/{sid}")
+def suppliers_put(sid: int, body: SupplierIn):
+    try:
+        memory.supplier_update(sid, body.name, body.active)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return _sup_payload()
+
+
+@app.delete("/api/suppliers/{sid}")
+def suppliers_del(sid: int):
+    memory.supplier_delete(sid)
+    return _sup_payload()
+
+
+def _year(year: int) -> int:
+    return year if 2000 <= year <= 2100 else memory.local_now().year
+
+
+@app.get("/api/purchases")
+def purchases_get(year: int = 0, month: int = 0, point: str = ""):
+    return memory.purchase_report(_year(year), month if 1 <= month <= 12 else 0, point)
+
+
+@app.post("/api/purchases")
+def purchases_post(body: PurchaseIn):
+    try:
+        memory.purchase_add(body.model_dump())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
+
+
+@app.put("/api/purchases/{pid}")
+def purchases_put(pid: int, body: PurchaseIn):
+    try:
+        memory.purchase_update(pid, body.model_dump())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
+
+
+@app.delete("/api/purchases/{pid}")
+def purchases_del(pid: int):
+    memory.purchase_delete(pid)
+    return {"ok": True}
+
+
+@app.get("/api/purchases/pdf")
+def purchases_pdf(year: int = 0, month: int = 0, point: str = "", lang: str = "ru"):
+    from urllib.parse import quote
+
+    import purchases_pdf as ppdf
+
+    y, m = _year(year), (month if 1 <= month <= 12 else 0)
+    try:
+        data = ppdf.build(memory.purchase_report(y, m, point), lang)
+    except FileNotFoundError as e:
+        raise HTTPException(500, str(e))
+    name = f"Закуп_{y}" + (f"_{m:02d}" if m else "") + (f"_{point}" if point else "") + ".pdf"
+    return Response(data, media_type="application/pdf", headers={
+        "Content-Disposition": f"attachment; filename=\"zakup_{y}.pdf\"; filename*=UTF-8''{quote(name)}"})
 
 
 # ---------- персонал ----------
