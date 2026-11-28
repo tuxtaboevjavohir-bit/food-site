@@ -312,31 +312,38 @@ def _metrics(a, lid, frm, to, metrics, group_by, limit=1000):
 
 
 def _acc_data(a, lid, period):
-    """Все данные точки за период — 2–3 запроса к Paloma, строго по очереди. Кэшируется."""
+    """Все данные точки за период: почасовые продажи (для рабочих дней и смен) + продажи по блюдам.
+    Запросы строго по очереди. Кэшируется."""
     def load():
         start, end, pstart, pend, group = _range(period)
         out = {"errors": [], "moments": None, "days": None}
-        wfrom = min(pstart, start - timedelta(days=1))
-        wto = min(end + timedelta(days=1), today())
-        if period != "month":
-            # один почасовой отчёт: из него выручка, график, прошлый период и смены
+        wto = min(end + timedelta(days=1), today())       # ночная смена заканчивается на следующий день
+        chunks = [(pstart, wto)] if period != "month" else [(pstart, start), (start, wto)]
+        moments = []
+        for frm, to in chunks:
             try:
-                out["moments"] = _moments_day_hour(_metrics(a, lid, wfrom, wto, "net,orders", "day,hour"))
-                if out["moments"] is None:
+                m = _moments_day_hour(_metrics(a, lid, frm, to, "net,orders", "day,hour"))
+                if m is None:
                     out["errors"].append("day,hour: неизвестный формат")
+                    moments = None
+                    break
+                moments += m
             except Exception as e:
                 out["errors"].append(str(e))
-        if out["moments"] is None:
-            # запасной путь: по дням (месяц) или по часам отдельными запросами
+                moments = None
+                break
+        if moments is not None:
+            seen, uniq = set(), []                        # месяц: на стыке двух запросов не считаем час дважды
+            for mm in moments:
+                if mm[0] not in seen:
+                    seen.add(mm[0]); uniq.append(mm)
+            out["moments"] = uniq
+        else:
+            # запасной путь, если Paloma не отдаёт «день × час»: календарные дни
             try:
                 out["days"] = _rows(_metrics(a, lid, pstart, end, "net,orders", "day"), "day")
             except Exception as e:
                 out["errors"].append(str(e))
-            if group == "hour":
-                try:
-                    out["hours"] = _rows(_metrics(a, lid, start, end, "net,orders", "hour"), "hour")
-                except Exception as e:
-                    out["errors"].append(str(e))
         try:
             out["items"] = _rows(_metrics(a, lid, start, end, "net", "item"), "item", item_names(a))
         except Exception as e:
@@ -347,18 +354,8 @@ def _acc_data(a, lid, period):
 
 
 def _shift_moments(a, lid, period):
-    """Почасовые данные для смен (для месяца — отдельный запрос, для остальных — из _acc_data)."""
-    if period != "month":
-        d = _acc_data(a, lid, period)
-        return d["moments"], d["errors"]
-    def load():
-        start, end, *_ = _range(period)
-        try:
-            m = _moments_day_hour(_metrics(a, lid, start - timedelta(days=1), min(end + timedelta(days=1), today()), "net,orders", "day,hour"))
-            return m, ([] if m is not None else ["day,hour: неизвестный формат"])
-        except Exception as e:
-            return None, [str(e)]
-    return _cached(f"shm:{a['idx']}:{lid}:{period}", load, CACHE_SECONDS)
+    d = _acc_data(a, lid, period)
+    return d["moments"], d["errors"]
 
 
 def _build(period: str, loc: str) -> dict:
@@ -374,8 +371,9 @@ def _build(period: str, loc: str) -> dict:
         res["errors"] += d["errors"]
         acc_tot = {"net": 0.0, "orders": 0.0}
         if d.get("moments") is not None:
+            cfg = shifts_cfg()
             for dt, net, orders in d["moments"]:
-                day = dt.date()
+                day, _sn = _shift_of(dt, cfg)            # рабочий день: дневная + ночная смена
                 if start <= day <= end:
                     acc_tot["net"] += net; acc_tot["orders"] += orders
                     k = dt.hour if group == "hour" else day.isoformat()
@@ -411,7 +409,9 @@ def _build(period: str, loc: str) -> dict:
         items.append(d.get("items") or [])
         locs.append([{"label": a["name"], "id": a["idx"], "net": acc_tot["net"], "orders": acc_tot["orders"]}])
     res["totals"], res["prev"] = tot, prev
-    res["series"] = sorted(series.values(), key=lambda r: r["id"] if isinstance(r["id"], int) else str(r["id"]))
+    first_h = min((int(x["start"]) for x in shifts_cfg()), default=0)   # часы рабочего дня: 09, 10 … 23, 00 … 08
+    res["series"] = sorted(series.values(), key=lambda r: (r["id"] - first_h) % 24 if isinstance(r["id"], int) else str(r["id"]))
+    res["business_day"] = any(d.get("moments") is not None for _, d in datas)
     res["by_item"] = _merge(items, "net")
     res["by_location"] = _merge(locs, "net") if len(targets) > 1 else []
     res["by_weekday"] = sorted(wds.values(), key=lambda r: r["id"])
@@ -577,7 +577,7 @@ def _build_shifts(period: str, loc: str) -> dict:
         for dt, net, orders in moments:
             sd, sname = _shift_of(dt, cfg)
             # в период входят смены, начавшиеся в нём, и ночная смена накануне первого дня (она заканчивается уже в периоде)
-            if not (start <= sd <= end or (sd == start - timedelta(days=1) and sname in overnight)):
+            if not (start <= sd <= end):
                 continue
             b = buckets.setdefault((sd.isoformat(), sname), {"date": sd.isoformat(), "shift": sname, "net": 0.0, "orders": 0.0, "by_point": {}})
             b["net"] += net

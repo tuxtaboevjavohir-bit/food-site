@@ -352,6 +352,7 @@ document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () =>
 const I18N = {
   ru: {
     emp:"Сотрудник", emp_ph:"Имя сотрудника", added:"Добавлен", saved:"Сохранено",
+    bday:"☀️+🌙 09:00–09:00",
     tab_staff:"Персонал", s_att:"🕘 Приход и уход", s_ops:"🍳 Кухня и доставка", s_list:"👥 Сотрудники", p_link:"Страница для точки (отметка, кухня, курьер):",
     p_link_hint:"Откройте её на планшете или телефоне на каждой точке. Сотрудник входит по своему PIN.", st_none:"Сотрудников пока нет — добавьте во вкладке «Сотрудники».",
     on_shift:"Сейчас на смене", since:"с", h:"ч", nobody:"Никто не отметился", att_sum:"Сводка по сотрудникам", att_log:"Журнал прихода и ухода", role:"Должность",
@@ -414,6 +415,7 @@ const I18N = {
   },
   kk: {
     emp:"Қызметкер", emp_ph:"Қызметкердің аты", added:"Қосылды", saved:"Сақталды",
+    bday:"☀️+🌙 09:00–09:00",
     tab_staff:"Қызметкерлер", s_att:"🕘 Келу-кету", s_ops:"🍳 Асхана және жеткізу", s_list:"👥 Қызметкерлер", p_link:"Нүкте беті (белгі, асхана, курьер):",
     p_link_hint:"Оны әр нүктедегі планшетте немесе телефонда ашыңыз. Қызметкер өз PIN-і арқылы кіреді.", st_none:"Әзірге қызметкер жоқ — «Қызметкерлер» бөлімінде қосыңыз.",
     on_shift:"Қазір ауысымда", since:"бастап", h:"сағ", nobody:"Ешкім белгі қоймады", att_sum:"Қызметкерлер бойынша қорытынды", att_log:"Келу-кету журналы", role:"Лауазымы",
@@ -554,7 +556,7 @@ async function loadSales(quiet){
   const lbl = r => d.group === "hour" ? (typeof r.id === "number" ? String(r.id).padStart(2, "0") + ":00" : String(r.label).slice(-5))
     : (/^\d{4}-\d{2}-\d{2}/.test(r.label) ? r.label.slice(8, 10) + "." + r.label.slice(5, 7) : r.label);
   const T = d.totals || {}, P = d.prev || {}, avg = T.orders ? T.net / T.orders : 0, pavg = P.orders ? P.net / P.orders : 0;
-  const range = d.from === d.to ? d.from : `${d.from} — ${d.to}`;
+  const range = (d.from === d.to ? d.from : `${d.from} — ${d.to}`) + (d.business_day ? " · " + t("bday") : "");
   let html = `<div class="kpis">
     <div class="kpi"><small>${t("k_rev")} · ${esc(range)}</small><b>${fmt(T.net)} ₸</b>${chg(T.net, P.net)}</div>
     <div class="kpi"><small>${t("k_orders")}</small><b>${fmt(T.orders)}</b>${chg(T.orders, P.orders)}</div>
