@@ -84,6 +84,10 @@ def init_db():
         f"CREATE TABLE IF NOT EXISTS purchases (id {pk}, supplier_id INTEGER NOT NULL, kind TEXT NOT NULL, amount REAL NOT NULL, "
         "day TEXT NOT NULL, point TEXT, note TEXT, created TEXT)"
     )
+    try:
+        _run("ALTER TABLE purchases ADD COLUMN IF NOT EXISTS src TEXT" if USE_PG else "ALTER TABLE purchases ADD COLUMN src TEXT")
+    except Exception:
+        pass  # колонка уже есть
     if _run("SELECT COUNT(*) AS n FROM suppliers", fetch="one")["n"] == 0:
         _run("INSERT INTO suppliers(name, active, sort, created) VALUES (?, 1, ?, ?)",
              [(n, i, _now()) for i, n in enumerate(DEFAULT_SUPPLIERS)], many=True)
@@ -617,6 +621,38 @@ def purchase_delete(pid: int):
     _run("DELETE FROM purchases WHERE id = ?", (pid,))
 
 
+def purchase_day_get(day: str) -> dict:
+    """Дневной закуп таблицей: точка × поставщик (как в общей таблице закупа)."""
+    datetime.strptime(day, "%Y-%m-%d")
+    cells, saved = {}, None
+    for r in _run("SELECT * FROM purchases WHERE day = ? AND kind = 'buy' AND src = 'day'", (day,), fetch="all"):
+        c = cells.setdefault(r["point"] or "", {})
+        c[str(r["supplier_id"])] = c.get(str(r["supplier_id"]), 0) + r["amount"]
+        saved = max(saved or "", r["created"] or "")
+    other = _run("SELECT COUNT(*) AS n FROM purchases WHERE day = ? AND (src IS NULL OR src <> 'day')", (day,), fetch="one")["n"]
+    return {"day": day, "cells": cells, "saved": saved, "other": other,
+            "suppliers": supplier_list(active_only=True), "points": points()}
+
+
+def purchase_day_save(day: str, cells: dict) -> int:
+    """Перезаписать дневной закуп за дату. cells = {точка: {id поставщика: сумма}}."""
+    datetime.strptime(day, "%Y-%m-%d")
+    valid = {s["id"] for s in supplier_list()}
+    rows, now = [], _now()
+    for pt, sup in (cells or {}).items():
+        for sid, amt in (sup or {}).items():
+            try:
+                sid, amt = int(sid), float(amt or 0)
+            except (TypeError, ValueError):
+                continue
+            if amt > 0 and sid in valid:
+                rows.append((sid, "buy", round(amt, 2), day, pt or "", "", now, "day"))
+    _run("DELETE FROM purchases WHERE day = ? AND src = 'day'", (day,))
+    if rows:
+        _run("INSERT INTO purchases(supplier_id, kind, amount, day, point, note, created, src) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", rows, many=True)
+    return len(rows)
+
+
 def purchase_report(year: int, month: int = 0, point: str = "") -> dict:
     """Отчёт по поставщикам за год (month=0) или за месяц.
     Долг считается накопительно: долг на начало + закуп − оплачено = долг на конец."""
@@ -651,8 +687,28 @@ def purchase_report(year: int, month: int = 0, point: str = "") -> dict:
     tot = {k: sum(x[k] for x in out) for k in ("opening", "buy", "pay", "closing")}
     tot["months"] = [sum(x["months"][i] for x in out) for i in range(12)]
     tot["months_pay"] = [sum(x["months_pay"][i] for x in out) for i in range(12)]
+    # таблица «по дням»: дата × точка × поставщик (только закуп)
+    daily = {}
+    for r in recs:
+        if r["kind"] != "buy":
+            continue
+        k = (r["day"], r["point"] or "")
+        d = daily.setdefault(k, {"day": r["day"], "point": r["point"] or "", "cells": {}, "total": 0.0})
+        d["cells"][str(r["supplier_id"])] = d["cells"].get(str(r["supplier_id"]), 0) + r["amount"]
+        d["total"] += r["amount"]
+    order = {p: i for i, p in enumerate(points())}
+    daily = sorted(daily.values(), key=lambda d: (d["day"], -order.get(d["point"], 99)), reverse=True)
+    # по месяцам и точкам (для годового PDF)
+    pm = {}
+    for r in recs:
+        if r["kind"] == "buy":
+            k = (int(r["day"][5:7]), r["point"] or "")
+            d = pm.setdefault(k, {"month": k[0], "point": k[1], "cells": {}, "total": 0.0})
+            d["cells"][str(r["supplier_id"])] = d["cells"].get(str(r["supplier_id"]), 0) + r["amount"]
+            d["total"] += r["amount"]
+    pm = sorted(pm.values(), key=lambda d: (d["month"], order.get(d["point"], 99)))
     return {"year": year, "month": month, "point": point, "from": start, "to": end,
-            "suppliers": out, "totals": tot, "records": recs}
+            "suppliers": out, "totals": tot, "records": recs, "daily": daily, "point_months": pm}
 
 
 def purchases_context() -> str:

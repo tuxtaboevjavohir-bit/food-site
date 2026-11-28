@@ -159,7 +159,7 @@
   .mtab td,.mtab th{text-align:right;white-space:nowrap}.mtab td:first-child,.mtab th:first-child{text-align:left}
   .dgrid th,.dgrid td{text-align:center;white-space:nowrap;vertical-align:middle;padding:6px 5px}
   .dgrid td:first-child,.dgrid th:first-child{text-align:left}
-  .dgrid input{width:100%;min-width:64px;box-sizing:border-box;text-align:right;background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px;font:inherit}
+  .dgrid input{width:100%;min-width:78px;box-sizing:border-box;text-align:right;background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px;font:inherit}
   .dgrid input:focus{border-color:#22d3ee;outline:none;box-shadow:0 0 8px #22d3ee55}
   .dgrid .tot{color:#67e8f9;font-weight:700;text-align:right}
   .dgrid tr.sum td{background:#0e2440;font-weight:700;text-align:right}
@@ -170,6 +170,15 @@
   .dinp{background:#03060d;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px;font:inherit}
   .dtab td,.dtab th{text-align:right;white-space:nowrap}.dtab td:nth-child(-n+2),.dtab th:nth-child(-n+2){text-align:left}
   .dtab td.tt{color:#67e8f9;font-weight:700}
+  .shares{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px}
+  .share{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+  .share.sh-all{border-color:#a855f766}
+  .sh-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px}
+  .sh-pct{font-size:26px;color:#67e8f9;text-shadow:0 0 12px #22d3ee66}
+  .sh-bar{height:8px;border-radius:4px;background:#0e2440;margin:8px 0;overflow:hidden}
+  .sh-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));box-shadow:0 0 8px #22d3ee88}
+  .sh-bot{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;color:var(--mute)}
+  .sh-bot b{font-size:16px;color:var(--txt)}
   .supadd{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
   .suprow{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
   .suprow span{flex:1}
@@ -304,7 +313,7 @@
         <select id="bSup"></select>
         <input type="date" id="bDay">
         <select id="bPt"></select>
-        <input type="number" id="bAmt" min="0" step="any" data-i18n-ph="b_amt" placeholder="Сумма, ₸">
+        <input type="text" inputmode="decimal" id="bAmt" autocomplete="off" data-i18n-ph="b_amt" placeholder="Сумма, ₸">
         <input type="text" id="bNote" data-i18n-ph="b_note" placeholder="Комментарий (накладная, что привезли)">
         <button class="main" id="bSave" style="padding:10px 16px" data-i18n="st_btn_add">Добавить</button>
         <button id="bCancel" class="copy" style="display:none;float:none" data-i18n="st_cancel">Отмена</button>
@@ -441,6 +450,8 @@ const I18N = {
     o_count:"Заказов", o_sum:"Сумма заказов", o_click:"нажмите на заказ — откроется состав", o_time:"Время", o_type:"Тип", o_status:"Статус", o_lines:"Поз.", o_total:"Сумма",
     i_total:"Всего товаров", i_sold:"продавались за период", i_sold_sum:"Продано на",
     t_shifts:"По сменам", shifts_n:"смен", k_avg_shift:"в среднем за смену", date:"Дата", shift:"Смена", now:"сейчас", no_data:"Нет данных за период.",
+    err_server:"Ошибка сервера", miss_h:"На GitHub загружены не все новые файлы:", miss_t:"Загрузите их (Add file → Upload files), иначе часть функций не работает.",
+    sh_checks:"чеков", sh_total:"Все точки", sh_share:"доля выручки",
     tab_buy:"Закуп", buy_h:"Закуп и оплаты поставщикам", b_pdf:"📄 Скачать PDF", b_new:"Новая запись", b_edit:"Изменить запись", b_k_buy:"📦 Закуп", b_k_pay:"💳 Оплата",
     b_amt:"Сумма, ₸", b_note:"Комментарий (накладная, что привезли)", b_hint:"«Закуп» — сколько привёз поставщик (долг растёт). «Оплата» — сколько вы ему заплатили (долг уменьшается).",
     b_year:"Весь год", b_buy:"Закуп", b_pay:"Оплачено", b_debt:"К оплате", b_open:"Долг на начало", b_total_debt:"Всего к оплате", b_sup:"Поставщик", b_paybtn:"💳 Оплатить долг",
@@ -514,6 +525,8 @@ const I18N = {
     o_count:"Тапсырыстар", o_sum:"Тапсырыстар сомасы", o_click:"тапсырысты басыңыз — құрамы ашылады", o_time:"Уақыты", o_type:"Түрі", o_status:"Күйі", o_lines:"Поз.", o_total:"Сома",
     i_total:"Барлық тауар", i_sold:"кезеңде сатылғаны", i_sold_sum:"Сатылды",
     t_shifts:"Ауысымдар бойынша", shifts_n:"ауысым", k_avg_shift:"бір ауысымға орташа", date:"Күні", shift:"Ауысым", now:"қазір", no_data:"Кезең бойынша дерек жоқ.",
+    err_server:"Сервер қатесі", miss_h:"GitHub-қа барлық жаңа файлдар жүктелмеген:", miss_t:"Оларды жүктеңіз (Add file → Upload files), әйтпесе кейбір функциялар жұмыс істемейді.",
+    sh_checks:"чек", sh_total:"Барлық нүктелер", sh_share:"түсім үлесі",
     tab_buy:"Сатып алу", buy_h:"Жеткізушілерден сатып алу және төлемдер", b_pdf:"📄 PDF жүктеу", b_new:"Жаңа жазба", b_edit:"Жазбаны өзгерту", b_k_buy:"📦 Сатып алу", b_k_pay:"💳 Төлем",
     b_amt:"Сома, ₸", b_note:"Түсініктеме (жүкқұжат, не әкелді)", b_hint:"«Сатып алу» — жеткізуші қанша әкелді (қарыз өседі). «Төлем» — сіз қанша төледіңіз (қарыз азаяды).",
     b_year:"Бүкіл жыл", b_buy:"Сатып алу", b_pay:"Төленді", b_debt:"Төлеу керек", b_open:"Басындағы қарыз", b_total_debt:"Барлығы төлеу керек", b_sup:"Жеткізуші", b_paybtn:"💳 Қарызды төлеу",
@@ -660,6 +673,16 @@ async function loadSales(quiet){
     <div class="kpi"><small>${t("k_prev")}</small><b style="font-size:16px">${fmt(P.net)} ₸</b><small>${esc(d.prev_from)} — ${esc(d.prev_to)}</small></div>
     ${T.returns != null ? `<div class="kpi"><small>${t("k_returns")}</small><b style="font-size:18px;color:#fca5a5">${fmt(T.refunds)} · −${fmt(T.returns)} ₸</b></div>` : ""}
     ${T.discounts != null ? `<div class="kpi"><small>${t("k_discounts")}</small><b style="font-size:18px">${fmt(T.discounts)} ₸</b><small>${T.net ? (T.discounts / (T.net + T.discounts) * 100).toFixed(1) + " %" : ""}</small></div>` : ""}</div>`;
+  const locsS = d.by_location || [];
+  if (locsS.length > 1) {
+    const tot = locsS.reduce((a, r) => a + (r.net || 0), 0);
+    html += `<div class="shares">${locsS.map((r, i) => { const sh = tot ? (r.net || 0) / tot * 100 : 0; return `<div class="share">
+      <div class="sh-top"><span>📍 ${esc(r.label)}</span><b class="sh-pct">${sh.toFixed(1)}%</b></div>
+      <div class="sh-bar"><i style="width:${sh}%"></i></div>
+      <div class="sh-bot"><b>${fmt(r.net)} ₸</b><span>${fmt(r.orders)} ${t("sh_checks")} · ${r.orders ? fmt(r.net / r.orders) : 0} ₸</span></div></div>`; }).join("")}
+      <div class="share sh-all"><div class="sh-top"><span>${t("sh_total")}</span><b class="sh-pct">100%</b></div><div class="sh-bar"><i style="width:100%"></i></div>
+      <div class="sh-bot"><b>${fmt(tot)} ₸</b><span>${fmt(locsS.reduce((a, r) => a + (r.orders || 0), 0))} ${t("sh_checks")}</span></div></div></div>`;
+  }
   const ser = d.series || [];
   if (ser.length) {
     const mx = Math.max(...ser.map(r => r.net || 0), 1);
@@ -965,7 +988,7 @@ function stAction(a, id){
   tr.querySelector(".mvX").onclick = () => tr.remove();
   const ok = () => { const v = parseFloat(tr.querySelector(".mvAmt").value); if (!(v > 0)) return;
     stCall(`/api/stock/${id}/move`, "POST", {amount: a === "in" ? v : -v, unit: tr.querySelector(".mvUnit").value, note: tr.querySelector(".mvNote").value}).catch(e => alert(e.message)); };
-  tr.querySelector(".mvOk").onclick = ok; tr.querySelector(".mvAmt").onkeydown = e => e.key === "Enter" && ok();
+  tr.querySelector(".mvOk").onclick = ok; tr.querySelector(".mvAmt").onkeydown = e => { if (e.key === "Enter") ok(); };
 }
 function stReset(){ stEdit = null; ["#stName", "#stCat", "#stQty", "#stMin"].forEach(s => $(s).value = ""); $("#stSave").textContent = t("st_btn_add"); $("#stFormTitle").textContent = t("st_add"); $("#stCancel").style.display = "none"; }
 $("#stCancel").onclick = stReset;
@@ -975,7 +998,7 @@ $("#stSave").onclick = async () => {
   const body = {name, category: $("#stCat").value, qty: num("#stQty") || 0, unit: $("#stUnit").value, min_qty: num("#stMin"), point: $("#stPoint").value};
   try { await stCall(stEdit ? "/api/stock/" + stEdit : "/api/stock", stEdit ? "PUT" : "POST", body); stReset(); } catch (e) { alert(e.message); }
 };
-$("#stName").onkeydown = $("#stQty").onkeydown = e => e.key === "Enter" && $("#stSave").click();
+$("#stName").onkeydown = $("#stQty").onkeydown = e => { if (e.key === "Enter") $("#stSave").click(); };
 // ---------- дневной закуп таблицей ----------
 let DAY = null, dDirty = false;
 const dNum = v => { const n = parseFloat(String(v).replace(/\s/g, "").replace(",", ".")); return isFinite(n) && n > 0 ? n : 0; };
@@ -998,13 +1021,13 @@ function dRevCells(){
 function renderDay(){
   const S = DAY.suppliers, P = DAY.points;
   $("#dGrid").innerHTML = `<tr><th>${t("point")}</th>${S.map(s => `<th>${esc(s.name)}</th>`).join("")}<th>${t("d_total")}</th><th>${t("d_rev")}</th><th>${t("d_pct")}</th><th>${t("d_left")}</th></tr>` +
-    P.map((p, i) => `<tr data-p="${i}"><td><b>${esc(p)}</b></td>${S.map(s => { const v = (DAY.cells[p] || {})[s.id]; return `<td><input inputmode="decimal" data-s="${s.id}" value="${v ? Math.round(v * 100) / 100 : ""}" placeholder="0"></td>`; }).join("")}<td class="tot">0</td><td class="rev"><small>…</small></td><td class="pct"></td><td class="left"></td></tr>`).join("") +
+    P.map((p, i) => `<tr data-p="${i}"><td><b>${esc(p)}</b></td>${S.map(s => { const v = (DAY.cells[p] || {})[s.id]; return `<td><input inputmode="decimal" autocomplete="off" data-s="${s.id}" value="${fmtIn(v)}" placeholder="0"></td>`; }).join("")}<td class="tot">0</td><td class="rev"><small>…</small></td><td class="pct"></td><td class="left"></td></tr>`).join("") +
     `<tr class="sum"><td>${t("d_total")}</td>${S.map(s => `<td data-cs="${s.id}">0</td>`).join("")}<td class="tot" id="dGrand">0</td><td class="rev" id="dRevAll">…</td><td class="pct" id="dPctAll"></td><td class="left" id="dLeftAll"></td></tr>`;
   $("#dSaved").textContent = DAY.saved ? `${t("d_saved_at")} ${DAY.saved.slice(11, 16)}` : "";
   $("#dMsg").innerHTML = DAY.other ? `<small>+ ${DAY.other} ${t("d_other")}</small>` : "";
   dDirty = false;
   $("#dGrid").querySelectorAll("input").forEach(inp => {
-    inp.oninput = () => { dDirty = true; dTotals(); };
+    moneyInput(inp); inp.addEventListener("input", () => { dDirty = true; dTotals(); });
     inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); const all = [...$("#dGrid").querySelectorAll("input")]; const n = all[all.indexOf(inp) + 1]; n ? n.focus() : $("#dSave").click(); } };
   });
   dTotals();
@@ -1092,6 +1115,7 @@ function renderBuy(){
   if (d.by_point && d.revenue_on) h += `<div class="kpis">${Object.entries(d.by_point).filter(([p]) => p).map(([p, x]) => `<div class="kpi"><small>📍 ${esc(p)}</small>
       <div style="font-size:13px;margin-top:4px">${t("b_buy")}: <b style="display:inline;font-size:15px">${money(x.buy)}</b></div>
       <div style="font-size:13px">${t("d_rev")}: <b style="display:inline;font-size:15px;color:var(--txt);text-shadow:none">${money(x.revenue)}</b></div>
+      ${x.revenue && d.revenue_total ? `<div style="font-size:13px">${t("sh_share")}: <b style="display:inline;font-size:15px">${(x.revenue / d.revenue_total * 100).toFixed(1)}%</b></div>` : ""}
       ${x.revenue ? `<div style="font-size:13px">${t("d_pct")}: <b style="display:inline;font-size:15px" class="${x.buy / x.revenue > .45 ? "pos" : "neg"}">${(x.buy / x.revenue * 100).toFixed(1)}%</b></div>` : ""}</div>`).join("")}</div>`;
   h += `<small style="display:block;margin:-4px 0 8px">${t("b_click")}</small><div class="sups">` + d.suppliers.map(x => `<div class="sup ${bFilter === x.id ? "on" : ""}" data-id="${x.id}">
       <h4>${esc(x.name)}</h4>
@@ -1132,35 +1156,44 @@ function renderBuy(){
   $("#buyBox").innerHTML = h;
   document.querySelectorAll(".sup").forEach(e => e.onclick = ev => { if (ev.target.dataset.pay) return; bFilter = bFilter === +e.dataset.id ? 0 : +e.dataset.id; renderBuy(); });
   document.querySelectorAll("[data-pay]").forEach(b => b.onclick = () => { const x = d.suppliers.find(s => s.id === +b.dataset.pay); bReset(); bSetKind("pay");
-    $("#bSup").value = x.id; $("#bAmt").value = Math.round(x.closing); $("#bDay").value = todayISO(); $("#bAmt").focus(); window.scrollTo({top: $("#buy").offsetTop - 80, behavior: "smooth"}); });
+    $("#bSup").value = x.id; $("#bAmt").value = fmtIn(x.closing); $("#bDay").value = todayISO(); $("#bAmt").focus(); window.scrollTo({top: $("#buy").offsetTop - 80, behavior: "smooth"}); });
   if ($("#bAll")) $("#bAll").onclick = () => { bFilter = 0; renderBuy(); };
   document.querySelectorAll("[data-bd]").forEach(b => b.onclick = async () => { if (!confirm(t("b_confirm") + "?")) return;
     try { await bApi("/api/purchases/" + b.dataset.bd, "DELETE"); loadBuy(); } catch (e) { alert(e.message); } });
   document.querySelectorAll("[data-be]").forEach(b => b.onclick = () => { const r = d.records.find(x => x.id === +b.dataset.be); bEdit = r.id; bSetKind(r.kind);
-    $("#bSup").value = r.supplier_id; $("#bDay").value = r.day; $("#bPt").value = r.point || ""; $("#bAmt").value = r.amount; $("#bNote").value = r.note || "";
+    $("#bSup").value = r.supplier_id; $("#bDay").value = r.day; $("#bPt").value = r.point || ""; $("#bAmt").value = fmtIn(r.amount); $("#bNote").value = r.note || "";
     $("#bSave").textContent = t("st_btn_save"); $("#bFormTitle").textContent = t("b_edit"); $("#bCancel").style.display = ""; window.scrollTo({top: $("#buy").offsetTop - 80, behavior: "smooth"}); });
   document.querySelectorAll("[data-sr]").forEach(b => b.onclick = async () => { const s = BSUPS.find(x => x.id === +b.dataset.sr); const n = prompt(t("b_rename"), s.name); if (!n || !n.trim()) return;
     try { await bApi("/api/suppliers/" + s.id, "PUT", {name: n.trim(), active: true}); loadBuy(); } catch (e) { alert(e.message); } });
   document.querySelectorAll("[data-sd]").forEach(b => b.onclick = async () => { const s = BSUPS.find(x => x.id === +b.dataset.sd); if (!confirm(t("b_del_sup") + " «" + s.name + "»?")) return;
     try { await bApi("/api/suppliers/" + s.id, "DELETE"); if (bFilter === s.id) bFilter = 0; loadBuy(); } catch (e) { alert(e.message); } });
   $("#bAddSup").onclick = async () => { const n = $("#bNewSup").value.trim(); if (!n) return; try { await bApi("/api/suppliers", "POST", {name: n}); loadBuy(); } catch (e) { alert(e.message); } };
-  $("#bNewSup").onkeydown = e => e.key === "Enter" && $("#bAddSup").click();
+  $("#bNewSup").onkeydown = e => { if (e.key === "Enter") $("#bAddSup").click(); };
 }
 async function bApi(url, method = "GET", body){
   const r = await fetch(url, {method, headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
-  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || r.statusText); return j;
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `${t("err_server")} (${r.status})`); return j;
 }
 function bReset(){ bEdit = null; $("#bAmt").value = ""; $("#bNote").value = ""; $("#bSave").textContent = t("st_btn_add"); $("#bFormTitle").textContent = t("b_new"); $("#bCancel").style.display = "none"; }
 $("#bCancel").onclick = () => { bReset(); bSetKind("buy"); };
 $("#bSave").onclick = async () => {
   const msg = $("#bMsg"); msg.className = ""; msg.textContent = "";
   if (!$("#bSup").value) { msg.className = "err"; msg.textContent = t("b_choose"); $("#bSup").focus(); return; }
-  const amt = parseFloat($("#bAmt").value); if (!(amt > 0)) { msg.className = "err"; msg.textContent = t("b_bad_amt"); $("#bAmt").focus(); return; }
+  const amt = dNum($("#bAmt").value); if (!(amt > 0)) { msg.className = "err"; msg.textContent = t("b_bad_amt"); $("#bAmt").focus(); return; }
   const body = {supplier_id: +$("#bSup").value, kind: bKind, amount: amt, day: $("#bDay").value || todayISO(), point: $("#bPt").value, note: $("#bNote").value};
   try { await bApi(bEdit ? "/api/purchases/" + bEdit : "/api/purchases", bEdit ? "PUT" : "POST", body); bReset(); bSetKind("buy"); msg.textContent = t("b_saved"); setTimeout(() => msg.textContent = "", 2500); loadBuy(); }
   catch (e) { msg.className = "err"; msg.textContent = e.message; }
 };
-$("#bAmt").onkeydown = $("#bNote").onkeydown = e => e.key === "Enter" && $("#bSave").click();
+const fmtIn = v => { if (!v) return ""; const [a, b] = (Math.round(v * 100) / 100).toString().split("."); return a.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (b ? "," + b : ""); };
+function moneyInput(inp){
+  inp.addEventListener("input", () => {
+    const raw = inp.value.replace(/[^\d.,]/g, "").replace(",", "."), [a, b] = raw.split(".");
+    const v = (a || "").replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (b !== undefined ? "," + b.slice(0, 2) : "");
+    if (v !== inp.value) { const end = inp.value.length - inp.selectionEnd; inp.value = v; const pos = Math.max(0, v.length - end); inp.setSelectionRange(pos, pos); }
+  });
+}
+moneyInput($("#bAmt"));
+$("#bAmt").onkeydown = $("#bNote").onkeydown = e => { if (e.key === "Enter") $("#bSave").click(); };
 ["#bYear", "#bMonth", "#bPoint"].forEach(s => $(s).onchange = () => loadBuy());
 $("#bPdf").onclick = () => { window.location.href = "/api/purchases/pdf?" + bQuery() + "&lang=" + LANG; };
 $("#stFilter").onchange = renderStock; $("#stSearch").oninput = renderStock;
@@ -1376,6 +1409,8 @@ async function loadHistory(){
   const r = await fetch("/api/info"); if (r.status === 401) { location.href = "/login"; return; }
   const i = await r.json(); AG = i.agents;
   INFO = i; setBadge();
+  if (i.missing && i.missing.length) { const w = document.createElement("div"); w.className = "card err"; w.style.cssText = "margin:12px auto;max-width:1200px;border-color:#f87171";
+    w.innerHTML = `⚠️ <b>${t("miss_h")}</b> ${i.missing.map(esc).join(", ")}. ${t("miss_t")}`; document.querySelector("main").prepend(w); }
   if (i.demo) $("#mode").classList.add("demo");
   applyLang();
   await officeReady; OFFICE.setNames(NAME);

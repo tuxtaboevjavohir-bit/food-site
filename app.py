@@ -22,7 +22,7 @@ import whatsapp  # noqa: E402
 from fastapi import BackgroundTasks  # noqa: E402
 
 BASE = Path(__file__).parent
-APP_VERSION = "2026-11-28.6"
+APP_VERSION = "2026-11-28.8"
 app = FastAPI(title="Food house — штаб агентов")
 memory.init_db()
 
@@ -122,7 +122,25 @@ def info():
         "whatsapp": whatsapp.connected(),
         "model": agents.MODEL,
         "agents": {k: {"name": v["name"], "emoji": v["emoji"]} for k, v in agents.AGENTS.items()},
+        "missing": _missing_files(),
     }
+
+
+def _missing_files() -> list[str]:
+    """Какие файлы на GitHub старые или не загружены (по наличию нужных функций)."""
+    miss = []
+    if not all(hasattr(memory, f) for f in ("purchase_day_get", "purchase_report", "supplier_list")):
+        miss.append("memory.py")
+    if not hasattr(paloma, "revenue"):
+        miss.append("paloma.py")
+    try:
+        import purchases_pdf  # noqa: F401
+    except Exception:
+        miss.append("purchases_pdf.py / requirements.txt")
+    for f in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf"):
+        if not (BASE / f).exists():
+            miss.append(f)
+    return miss
 
 
 @app.post("/api/task")
